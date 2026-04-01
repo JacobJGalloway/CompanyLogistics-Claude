@@ -2,7 +2,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ToDoAPI-Claude", "ToDoAPI-Claude.csproj", "{59232351-50F1-073F-ACA2-1F97DE9B7573}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InventoryWarehouse", "InventoryWarehouse.csproj", "{59232351-50F1-073F-ACA2-1F97DE9B7573}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
