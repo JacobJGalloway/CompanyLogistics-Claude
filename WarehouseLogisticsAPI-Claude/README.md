@@ -1,0 +1,3 @@
+# WarehouseLogisticsAPI-Claude
+
+This is the API to manipulate the inventory of Items in a warehouse. It will process either individual requests or a BillofLading from a shipment to update the warehouse Inventory by increasing and removing quantities as available. You will also be able to start checking a warehouse's Item by SKU and UnloadedDate to see current Inventory. Future Inventory is a future feature after MVP to start analytics.

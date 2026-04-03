@@ -1,3 +1,3 @@
 # WarehouseInventoryAPI-Claude
 
-This is the base API to track the inventory of Items in a warehouse. There will be a separate API to handle logistics between API's and a client UI for withrawls of inventory items.
+This is the API to track the Inventory of Items in a warehouse. This will also track expected Inventory based on active BillOfLadings which will create entries with future UnloadedDates. This current/future DateTime will serve to create the first analytics data features along with shipping figures for the specific warehouse.
