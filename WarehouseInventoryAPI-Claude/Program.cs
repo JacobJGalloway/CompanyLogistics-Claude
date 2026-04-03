@@ -5,7 +5,7 @@ using WarehouseInventory_Claude.Data.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var dbPath = Path.Combine(builder.Environment.ContentRootPath, "Data", "Implementation Example - Sqlite 3", "WarehouseData.db3");
+var dbPath = Path.Combine(builder.Environment.ContentRootPath, "..", "Sqlite 3 Implementation", "WarehouseData.db3");
 builder.Services.AddDbContext<InventoryContext>(options => options.UseSqlite($"Data Source={dbPath}"));
 builder.Services.AddScoped<IClothingRepository, ClothingRepository>();
 builder.Services.AddScoped<IPPERepository, PPERepository>();

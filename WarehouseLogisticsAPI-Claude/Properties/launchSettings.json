@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "WarehouseLogisticsAPI-Claude": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7001;http://localhost:5001",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "WAREHOUSE_ID": "123",
+        "LINE_ENTRIES_WORDING": "Inventory Updates"
+      }
+    }
+  }
+}
