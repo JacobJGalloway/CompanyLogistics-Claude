@@ -1,7 +1,11 @@
-namespace ToDoAPI_Claude.Models.Interfaces;
-
-public interface IItem : IModel
+namespace WarehouseInventory_Claude.Models.Interfaces
 {
-    string Identification { get; set; }
-    string Category { get; set; }
+    public interface IItem
+    {
+        string PartitionKey { get; set; }
+        string RowKey { get; set; }
+        string SKUMarker { get; set; }
+
+        DateTime UnloadedDate { get; set; }
+    }
 }

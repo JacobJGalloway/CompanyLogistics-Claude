@@ -1,0 +1,10 @@
+-- database: ./WarehouseData.db3
+
+
+CREATE TABLE IF NOT EXISTS PPE (
+    PartitionKey   TEXT NOT NULL UNIQUE PRIMARY KEY,
+    RowKey         TEXT NOT NULL,
+    Category       TEXT NOT NULL DEFAULT '',
+    Type           TEXT NOT NULL DEFAULT '',
+    Size           REAL NOT NULL DEFAULT 0.0
+);

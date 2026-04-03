@@ -1,0 +1,315 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "Warehouse Inventory API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/Clothing": {
+      "get": {
+        "tags": ["Clothing"],
+        "operationId": "GetAllClothing",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Clothing" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Clothing"],
+        "operationId": "CreateClothing",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Clothing" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Clothing" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Clothing/{id}": {
+      "get": {
+        "tags": ["Clothing"],
+        "operationId": "GetClothingById",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Clothing" }
+              }
+            }
+          },
+          "404": { "description": "Not Found" }
+        }
+      },
+      "put": {
+        "tags": ["Clothing"],
+        "operationId": "UpdateClothing",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Clothing" }
+            }
+          }
+        },
+        "responses": {
+          "204": { "description": "No Content" },
+          "400": { "description": "Bad Request" }
+        }
+      },
+      "delete": {
+        "tags": ["Clothing"],
+        "operationId": "DeleteClothing",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "No Content" },
+          "404": { "description": "Not Found" }
+        }
+      }
+    },
+    "/api/PPE": {
+      "get": {
+        "tags": ["PPE"],
+        "operationId": "GetAllPPE",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/PPE" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["PPE"],
+        "operationId": "CreatePPE",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PPE" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PPE" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/PPE/{id}": {
+      "get": {
+        "tags": ["PPE"],
+        "operationId": "GetPPEById",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PPE" }
+              }
+            }
+          },
+          "404": { "description": "Not Found" }
+        }
+      },
+      "put": {
+        "tags": ["PPE"],
+        "operationId": "UpdatePPE",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PPE" }
+            }
+          }
+        },
+        "responses": {
+          "204": { "description": "No Content" },
+          "400": { "description": "Bad Request" }
+        }
+      },
+      "delete": {
+        "tags": ["PPE"],
+        "operationId": "DeletePPE",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "No Content" },
+          "404": { "description": "Not Found" }
+        }
+      }
+    },
+    "/api/Tool": {
+      "get": {
+        "tags": ["Tool"],
+        "operationId": "GetAllTools",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Tool" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Tool"],
+        "operationId": "CreateTool",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Tool" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Tool" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Tool/{id}": {
+      "get": {
+        "tags": ["Tool"],
+        "operationId": "GetToolById",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Tool" }
+              }
+            }
+          },
+          "404": { "description": "Not Found" }
+        }
+      },
+      "put": {
+        "tags": ["Tool"],
+        "operationId": "UpdateTool",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Tool" }
+            }
+          }
+        },
+        "responses": {
+          "204": { "description": "No Content" },
+          "400": { "description": "Bad Request" }
+        }
+      },
+      "delete": {
+        "tags": ["Tool"],
+        "operationId": "DeleteTool",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "No Content" },
+          "404": { "description": "Not Found" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Clothing": {
+        "type": "object",
+        "properties": {
+          "identification": { "type": "string" },
+          "category": { "type": "string" },
+          "type": { "type": "string" },
+          "color": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      },
+      "PPE": {
+        "type": "object",
+        "properties": {
+          "identification": { "type": "string" },
+          "category": { "type": "string" },
+          "type": { "type": "string" },
+          "size": { "type": "number", "format": "double" }
+        }
+      },
+      "Tool": {
+        "type": "object",
+        "properties": {
+          "identification": { "type": "string" },
+          "category": { "type": "string" },
+          "type": { "type": "string" },
+          "size": { "type": "number", "format": "double" },
+          "description": { "type": "string" }
+        }
+      }
+    }
+  }
+}
