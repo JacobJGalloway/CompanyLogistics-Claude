@@ -1,2 +1,3 @@
 # WarehouseInventoryAPI-Claude
+
 This is the base API to track the inventory of Items in a warehouse. There will be a separate API to handle logistics between API's and a client UI for withrawls of inventory items.
