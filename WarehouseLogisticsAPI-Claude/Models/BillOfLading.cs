@@ -1,9 +1,13 @@
+using System.ComponentModel.DataAnnotations;
 using WarehouseLogistics_Claude.Models.Interfaces;
 
 namespace WarehouseLogistics_Claude.Models
 {
     public class BillOfLading : IBillOfLading
     {
+        // Partition key is "{TransactionID}-{GUID}" to allow for 
+        // efficient querying of line entries by transaction while ensuring 
+        // uniqueness for storage in Cosmos DB or similar NoSQL databases.
         public string PartitionKey { get; set; } = string.Empty;
         public string TransactionId { get; set; } = string.Empty;
         public string Status { get; set; } = "Pending"; // Possible values: Pending, Submitted, Created, In Transit, Delivered
@@ -11,6 +15,6 @@ namespace WarehouseLogistics_Claude.Models
         public string CustomerLastName { get; set; } = string.Empty;
         public string City { get; set; } = string.Empty;
         public string State { get; set; } = string.Empty;
-        public List<LineEntry> LineEntries { get; set; } = new List<LineEntry>();
+        public required List<LineEntry> LineEntries { get; set; }
     }
 }

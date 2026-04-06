@@ -1,11 +1,11 @@
-using WarehouseLogistics_Claude.Controllers.Interfaces;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var warehouseId = Environment.GetEnvironmentVariable("WAREHOUSE_ID")
-    ?? throw new InvalidOperationException("WAREHOUSE_ID environment variable is not set.");
+var locationId = Path.Combine(builder.Environment.ContentRootPath, "..", "Sqlite 3 Implementation", "WarehouseData.db3");
 
-builder.Services.AddSingleton<string>(warehouseId);
+builder.Services.AddSingleton<string>(locationId);
 builder.Services.AddControllers();
 
 var app = builder.Build();

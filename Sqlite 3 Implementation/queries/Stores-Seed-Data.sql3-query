@@ -1,0 +1,21 @@
+-- database: ../WarehouseData.db3
+-- 9 stores, 3 per base warehouse. PartitionKey is "{StoreId}-{BaseWarehouseId}-{GUID}".
+-- Depends on Warehouses-Seed-Data.
+
+PRAGMA foreign_keys = ON;
+
+INSERT OR IGNORE INTO Stores (PartitionKey, StoreId, BaseWarehouseId, City, State) VALUES
+-- WH001 (Chicago, IL) stores
+('ST0001-WH001-00000000000000000000000000000001', 'ST0001', 'WH001', 'Chicago',    'IL'),
+('ST0002-WH001-00000000000000000000000000000002', 'ST0002', 'WH001', 'Naperville',  'IL'),
+('ST0003-WH001-00000000000000000000000000000003', 'ST0003', 'WH001', 'Rockford',    'IL'),
+
+-- WH002 (Indianapolis, IN) stores
+('ST0004-WH002-00000000000000000000000000000004', 'ST0004', 'WH002', 'Indianapolis', 'IN'),
+('ST0005-WH002-00000000000000000000000000000005', 'ST0005', 'WH002', 'Fort Wayne',   'IN'),
+('ST0006-WH002-00000000000000000000000000000006', 'ST0006', 'WH002', 'Evansville',   'IN'),
+
+-- WH003 (Milwaukee, WI) stores
+('ST0007-WH003-00000000000000000000000000000007', 'ST0007', 'WH003', 'Milwaukee',  'WI'),
+('ST0008-WH003-00000000000000000000000000000008', 'ST0008', 'WH003', 'Madison',    'WI'),
+('ST0009-WH003-00000000000000000000000000000009', 'ST0009', 'WH003', 'Green Bay',  'WI');

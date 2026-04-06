@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using WarehouseInventory_Claude.Data.Interfaces;
 using WarehouseInventory_Claude.Models;
 
@@ -7,28 +6,29 @@ namespace WarehouseInventory_Claude.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class PPEController(IPPERepository repository) : ControllerBase
+    public class PPEController(IUnitOfWork unitOfWork) : ControllerBase
     {
-        private readonly IPPERepository _repository = repository;
+        private readonly IUnitOfWork _unitOfWork = unitOfWork;
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<PPE>>> GetAll()
         {
-            return Ok(await _repository.GetAllAsync());
+            return Ok(await _unitOfWork.PPE.GetAllAsync());
         }
 
         [HttpGet("{skuId}")]
-        public async Task<ActionResult<PPE>> GetBySKUId(string skuId)
+        public async Task<ActionResult<List<PPE>>> GetBySKUId(string skuId)
         {
-            var item = await _repository.GetBySKUIdAsync(skuId);
-            if (item is null) return NotFound();
-            return item;
+            var items = await _unitOfWork.GetPPEBySKUIdAsync(skuId);
+            if (items.Count == 0) return new List<PPE>();
+            return Ok(items);
         }
 
         [HttpPost]
         public async Task<ActionResult<PPE>> Create(PPE item)
         {
-            var created = await _repository.AddAsync(item);
+            var created = await _unitOfWork.PPE.AddAsync(item);
+            await _unitOfWork.SaveChangesAsync();
             return CreatedAtAction(nameof(Create), new { id = created.PartitionKey }, created);
         }
 
@@ -36,16 +36,17 @@ namespace WarehouseInventory_Claude.Controllers
         public async Task<IActionResult> UpdateBySKUId(string skuId, PPE item)
         {
             if (skuId != item.SKUMarker) return BadRequest();
-            await _repository.UpdateBySKUIdAsync(skuId, item);
+            await _unitOfWork.PPE.UpdateBySKUIdAsync(skuId, item);
+            await _unitOfWork.SaveChangesAsync();
             return NoContent();
         }
 
         [HttpDelete("{skuId}")]
         public async Task<IActionResult> DeleteBySKUId(string skuId)
         {
-            if (!await _repository.DeleteBySKUIdAsync(skuId)) return NotFound();
+            if (!await _unitOfWork.PPE.DeleteBySKUIdAsync(skuId)) return NotFound();
+            await _unitOfWork.SaveChangesAsync();
             return NoContent();
         }
     }
 }
-

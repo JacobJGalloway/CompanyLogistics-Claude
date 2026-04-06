@@ -1,8 +1,0 @@
--- database: ./WarehouseData.db3
--- Adds logistics columns to support internal transfers and transit projection
-
-ALTER TABLE BillOfLading ADD COLUMN CreatedDate            TEXT    NOT NULL DEFAULT '';
-ALTER TABLE BillOfLading ADD COLUMN IsInternal             INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE BillOfLading ADD COLUMN OriginWarehouseId      TEXT    NOT NULL DEFAULT '';
--- Not adding to allow for multiple destination warehouses in a single bill of lading
---ALTER TABLE BillOfLading ADD COLUMN DestinationWarehouseId TEXT    NOT NULL DEFAULT '';

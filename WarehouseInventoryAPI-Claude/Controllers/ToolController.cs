@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using WarehouseInventory_Claude.Data.Interfaces;
 using WarehouseInventory_Claude.Models;
 
@@ -7,28 +6,29 @@ namespace WarehouseInventory_Claude.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ToolController(IToolRepository repository) : ControllerBase
+    public class ToolController(IUnitOfWork unitOfWork) : ControllerBase
     {
-        private readonly IToolRepository _repository = repository;
+        private readonly IUnitOfWork _unitOfWork = unitOfWork;
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Tool>>> GetAll()
         {
-            return Ok(await _repository.GetAllAsync());
+            return Ok(await _unitOfWork.Tools.GetAllAsync());
         }
 
         [HttpGet("{skuId}")]
-        public async Task<ActionResult<Tool>> GetBySKUId(string skuId)
+        public async Task<ActionResult<List<Tool>>> GetBySKUIdAsync(string skuId)
         {
-            var item = await _repository.GetBySKUIdAsync(skuId);
-            if (item is null) return NotFound();
-            return item;
+            var items = await _unitOfWork.GetToolBySKUIdAsync(skuId);
+            if (items.Count == 0) return new List<Tool>();
+            return Ok(items);
         }
 
         [HttpPost]
         public async Task<ActionResult<Tool>> Create(Tool item)
         {
-            var created = await _repository.AddAsync(item);
+            var created = await _unitOfWork.Tools.AddAsync(item);
+            await _unitOfWork.SaveChangesAsync();
             return CreatedAtAction(nameof(Create), new { skuId = created.PartitionKey }, created);
         }
 
@@ -36,16 +36,17 @@ namespace WarehouseInventory_Claude.Controllers
         public async Task<IActionResult> UpdateBySKUId(string skuId, Tool item)
         {
             if (skuId != item.SKUMarker) return BadRequest();
-            await _repository.UpdateBySKUIdAsync(skuId, item);
+            await _unitOfWork.Tools.UpdateBySKUIdAsync(skuId, item);
+            await _unitOfWork.SaveChangesAsync();
             return NoContent();
         }
 
         [HttpDelete("{skuId}")]
         public async Task<IActionResult> DeleteBySKUId(string skuId)
         {
-            if (!await _repository.DeleteBySKUIdAsync(skuId)) return NotFound();
+            if (!await _unitOfWork.Tools.DeleteBySKUIdAsync(skuId)) return NotFound();
+            await _unitOfWork.SaveChangesAsync();
             return NoContent();
         }
     }
 }
-

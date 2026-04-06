@@ -6,45 +6,47 @@ namespace WarehouseInventory_Claude.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ClothingController(IClothingRepository repository) : ControllerBase
+    public class ClothingController(IUnitOfWork unitOfWork) : ControllerBase
     {
-        private readonly IClothingRepository _repository = repository;
+        private readonly IUnitOfWork _unitOfWork = unitOfWork;
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Clothing>>> GetAll()
         {
-            return Ok(await _repository.GetAllAsync());
+            return Ok(await _unitOfWork.Clothing.GetAllAsync());
         }
 
         [HttpGet("{skuId}")]
-        public async Task<ActionResult<Clothing>> GetBySKUId(string skuId)
+        public async Task<ActionResult<List<Clothing>>> GetClothingBySKUIdAsync(string skuId)
         {
-            var item = await _repository.GetBySKUIdAsync(skuId);
-            if (item is null) return NotFound();
-            return item;
+            var items = await _unitOfWork.GetClothingBySKUIdAsync(skuId);
+            if (items.Count == 0) return new List<Clothing>();
+            return Ok(items);
         }
 
         [HttpPost]
         public async Task<ActionResult<Clothing>> Create(Clothing item)
         {
-            var created = await _repository.AddAsync(item);
+            var created = await _unitOfWork.Clothing.AddAsync(item);
+            await _unitOfWork.SaveChangesAsync();
             return CreatedAtAction(nameof(Create), new { id = created.PartitionKey }, created);
         }
 
-        [HttpPut("{id}")]
+        [HttpPut("{skuId}")]
         public async Task<IActionResult> UpdateBySKUId(string skuId, Clothing item)
         {
             if (skuId != item.SKUMarker) return BadRequest();
-            await _repository.UpdateBySKUIdAsync(skuId, item);
+            await _unitOfWork.Clothing.UpdateBySKUIdAsync(skuId, item);
+            await _unitOfWork.SaveChangesAsync();
             return NoContent();
         }
 
         [HttpDelete("{skuId}")]
         public async Task<IActionResult> DeleteBySKUIdAsync(string skuId)
         {
-            if (!await _repository.DeleteBySKUIdAsync(skuId)) return NotFound();
+            if (!await _unitOfWork.Clothing.DeleteBySKUIdAsync(skuId)) return NotFound();
+            await _unitOfWork.SaveChangesAsync();
             return NoContent();
         }
     }
 }
-

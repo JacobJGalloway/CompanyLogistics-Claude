@@ -13,25 +13,29 @@ namespace WarehouseInventory_Claude.Data.Repositories
             return await _context.Clothing.ToListAsync();
         }
 
-        public async Task<Clothing?> GetBySKUIdAsync(string skuId)
+        public async Task<List<Clothing>> GetBySKUIdAsync(string skuId)
         {
-            return await _context.FindClothingBySKUAsync(skuId);
+            var items = await _context.GetClothingBySKUIdsync(skuId);
+            
+            if (items.Count == 0) return new List<Clothing>();
+
+            return items;
         }
 
         public async Task<Clothing> AddAsync(Clothing item)
         {
             _context.Clothing.Add(item);
-            await _context.SaveChangesAsync();
             return item;
         }
 
         public async Task UpdateBySKUIdAsync(string skuId, Clothing item)
         {
-            var existingItem = await GetBySKUIdAsync(skuId);
-            if (existingItem is null) return;
+            var existingItems = await GetBySKUIdAsync(skuId);
+            if (existingItems.Count == 0) return;
 
-            _context.Entry(existingItem).CurrentValues.SetValues(item);
-            await _context.SaveChangesAsync();
+            var target = existingItems.FirstOrDefault(c => c.PartitionKey == item.PartitionKey)
+                         ?? existingItems[0];
+            _context.Entry(target).CurrentValues.SetValues(item);
         }
 
         public async Task<bool> DeleteBySKUIdAsync(string skuId)
@@ -39,9 +43,7 @@ namespace WarehouseInventory_Claude.Data.Repositories
             List<Clothing> items = await _context.Clothing.Where(c => c.SKUMarker == skuId).ToListAsync();
             if (items.Count == 0) return false;
             _context.Clothing.RemoveRange(items);
-            await _context.SaveChangesAsync();
             return true;
         }
     }
 }
-

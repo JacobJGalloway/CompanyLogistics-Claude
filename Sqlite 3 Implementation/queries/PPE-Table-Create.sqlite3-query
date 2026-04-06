@@ -1,0 +1,10 @@
+-- database: database: ../WarehouseData.db3
+
+
+CREATE TABLE IF NOT EXISTS PPE (
+    PartitionKey   TEXT NOT NULL UNIQUE PRIMARY KEY,
+    RowKey         TEXT NOT NULL DEFAULT '',
+    SKUMarker      TEXT NOT NULL DEFAULT '',
+    UnloadedDate   TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY (SKUMarker) REFERENCES SKUCatalog(SKUMarker)
+);

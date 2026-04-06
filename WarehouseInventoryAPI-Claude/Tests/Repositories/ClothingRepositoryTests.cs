@@ -1,123 +1,152 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Xunit;
 using WarehouseInventory_Claude.Data;
 using WarehouseInventory_Claude.Data.Repositories;
 using WarehouseInventory_Claude.Models;
 
-namespace WarehouseInventory_Claude.Tests.Repositories;
-
-public class ClothingRepositoryTests : IDisposable
+namespace WarehouseInventory_Claude.Tests.Repositories
 {
-    private readonly SqliteConnection _connection;
-    private readonly InventoryContext _context;
-    private readonly ClothingRepository _repository;
-
-    public ClothingRepositoryTests()
+    public class ClothingRepositoryTests : IDisposable
     {
-        _connection = new SqliteConnection("DataSource=:memory:");
-        _connection.Open();
+        private readonly SqliteConnection _connection;
+        private readonly InventoryContext _context;
+        private readonly ClothingRepository _repository;
 
-        var options = new DbContextOptionsBuilder<InventoryContext>()
-            .UseSqlite(_connection)
-            .Options;
+        public ClothingRepositoryTests()
+        {
+            _connection = new SqliteConnection("DataSource=:memory:");
+            _connection.Open();
+            var options = new DbContextOptionsBuilder<InventoryContext>()
+                .UseSqlite(_connection)
+                .Options;
+            _context = new InventoryContext(options);
+            _context.Database.EnsureCreated();
+            _repository = new ClothingRepository(_context);
+        }
 
-        _context = new InventoryContext(options);
-        _context.Database.EnsureCreated();
-        _repository = new ClothingRepository(_context);
-    }
+        public void Dispose()
+        {
+            _context.Dispose();
+            _connection.Dispose();
+        }
 
-    public void Dispose()
-    {
-        _context.Dispose();
-        _connection.Dispose();
-    }
+        [Fact]
+        public async Task GetAllAsync_ReturnsAllItems()
+        {
+            _context.Clothing.AddRange(
+                new Clothing { PartitionKey = "pk1", SKUMarker = "CLTH001", UnloadedDate = DateTime.UtcNow },
+                new Clothing { PartitionKey = "pk2", SKUMarker = "CLTH002", UnloadedDate = DateTime.UtcNow }
+            );
+            await _context.SaveChangesAsync();
 
-    [Fact]
-    public async Task GetAllAsync_ReturnsAllItems()
-    {
-        _context.Clothing.AddRange(
-            new Clothing { PartitionKey = "1", SKUMarker = "SKU001", Type = "Shirt" },
-            new Clothing { PartitionKey = "2", SKUMarker = "SKU002", Type = "Pants" }
-        );
-        await _context.SaveChangesAsync();
+            var result = await _repository.GetAllAsync();
 
-        var result = await _repository.GetAllAsync();
+            Assert.Equal(2, result.Count());
+        }
 
-        Assert.Equal(2, result.Count());
-    }
+        [Fact]
+        public async Task GetBySKUIdAsync_ReturnsMatchingItems_WhenFound()
+        {
+            _context.Clothing.AddRange(
+                new Clothing { PartitionKey = "pk1", SKUMarker = "CLTH001", UnloadedDate = DateTime.UtcNow },
+                new Clothing { PartitionKey = "pk2", SKUMarker = "CLTH001", UnloadedDate = DateTime.UtcNow },
+                new Clothing { PartitionKey = "pk3", SKUMarker = "CLTH002", UnloadedDate = DateTime.UtcNow }
+            );
+            await _context.SaveChangesAsync();
 
-    [Fact]
-    public async Task GetBySKUIdAsync_ReturnsItem_WhenFound()
-    {
-        _context.Clothing.Add(new Clothing { PartitionKey = "1", SKUMarker = "SKU001", Type = "Shirt" });
-        await _context.SaveChangesAsync();
+            var result = await _repository.GetBySKUIdAsync("CLTH001");
 
-        var result = await _repository.GetBySKUIdAsync("SKU001");
+            Assert.Equal(2, result.Count);
+            Assert.All(result, c => Assert.Equal("CLTH001", c.SKUMarker));
+        }
 
-        Assert.NotNull(result);
-        Assert.Equal("SKU001", result.SKUMarker);
-    }
+        [Fact]
+        public async Task GetBySKUIdAsync_ReturnsEmptyList_WhenNotFound()
+        {
+            var result = await _repository.GetBySKUIdAsync("CLTH999");
 
-    [Fact]
-    public async Task GetBySKUIdAsync_ThrowsKeyNotFoundException_WhenMissing()
-    {
-        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            _repository.GetBySKUIdAsync("MISSING"));
-    }
+            Assert.Empty(result);
+        }
 
-    [Fact]
-    public async Task AddAsync_PersistsAndReturnsItem()
-    {
-        var item = new Clothing { PartitionKey = "1", SKUMarker = "SKU001", Type = "Shirt", Color = "Blue" };
+        [Fact]
+        public async Task AddAsync_StagesItem_PersistedAfterSave()
+        {
+            var item = new Clothing { PartitionKey = "pk1", SKUMarker = "CLTH001", UnloadedDate = DateTime.UtcNow };
 
-        var result = await _repository.AddAsync(item);
+            await _repository.AddAsync(item);
+            await _context.SaveChangesAsync();
 
-        Assert.Equal("SKU001", result.SKUMarker);
-        Assert.Equal(1, _context.Clothing.Count());
-    }
+            Assert.Equal(1, await _context.Clothing.CountAsync());
+        }
 
-    [Fact]
-    public async Task UpdateBySKUIdAsync_UpdatesExistingItem()
-    {
-        _context.Clothing.Add(new Clothing { PartitionKey = "1", SKUMarker = "SKU001", Type = "Shirt", Color = "Blue" });
-        await _context.SaveChangesAsync();
+        [Fact]
+        public async Task UpdateBySKUIdAsync_UpdatesByPartitionKey_WhenMatch()
+        {
+            var original = new Clothing { PartitionKey = "pk1", SKUMarker = "CLTH001", UnloadedDate = DateTime.UtcNow };
+            var other = new Clothing { PartitionKey = "pk2", SKUMarker = "CLTH001", UnloadedDate = DateTime.UtcNow };
+            _context.Clothing.AddRange(original, other);
+            await _context.SaveChangesAsync();
 
-        var updated = new Clothing { PartitionKey = "1", SKUMarker = "SKU001", Type = "Shirt", Color = "Red" };
-        await _repository.UpdateBySKUIdAsync("SKU001", updated);
+            var updated = new Clothing { PartitionKey = "pk1", SKUMarker = "CLTH001", UnloadedDate = DateTime.UtcNow.AddDays(1) };
+            await _repository.UpdateBySKUIdAsync("CLTH001", updated);
+            await _context.SaveChangesAsync();
 
-        var result = await _context.Clothing.FindAsync("1");
-        Assert.Equal("Red", result!.Color);
-    }
+            var result = await _context.Clothing.FindAsync("pk1");
+            Assert.Equal(updated.UnloadedDate, result!.UnloadedDate);
+        }
 
-    [Fact]
-    public async Task UpdateBySKUIdAsync_ThrowsKeyNotFoundException_WhenSKUNotFound()
-    {
-        // FindClothingBySKUAsync throws KeyNotFoundException instead of returning null
-        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            _repository.UpdateBySKUIdAsync("MISSING", new Clothing { SKUMarker = "MISSING" }));
-    }
+        [Fact]
+        public async Task UpdateBySKUIdAsync_FallsBackToFirst_WhenNoPartitionKeyMatch()
+        {
+            var item = new Clothing { PartitionKey = "pk1", SKUMarker = "CLTH001", UnloadedDate = DateTime.UtcNow };
+            _context.Clothing.Add(item);
+            await _context.SaveChangesAsync();
 
-    [Fact]
-    public async Task DeleteBySKUIdAsync_ReturnsTrueAndRemovesItems_WhenFound()
-    {
-        _context.Clothing.AddRange(
-            new Clothing { PartitionKey = "1", SKUMarker = "SKU001", Type = "Shirt" },
-            new Clothing { PartitionKey = "2", SKUMarker = "SKU001", Type = "Shirt" }
-        );
-        await _context.SaveChangesAsync();
+            var updated = new Clothing { PartitionKey = "pk-nomatch", SKUMarker = "CLTH001", UnloadedDate = DateTime.UtcNow.AddDays(1) };
+            await _repository.UpdateBySKUIdAsync("CLTH001", updated);
+            await _context.SaveChangesAsync();
 
-        var result = await _repository.DeleteBySKUIdAsync("SKU001");
+            var result = await _context.Clothing.FindAsync("pk1");
+            Assert.Equal(updated.UnloadedDate, result!.UnloadedDate);
+        }
 
-        Assert.True(result);
-        Assert.Equal(0, _context.Clothing.Count());
-    }
+        [Fact]
+        public async Task UpdateBySKUIdAsync_DoesNothing_WhenSkuNotFound()
+        {
+            var item = new Clothing { PartitionKey = "pk1", SKUMarker = "CLTH001", UnloadedDate = DateTime.UtcNow };
+            _context.Clothing.Add(item);
+            await _context.SaveChangesAsync();
 
-    [Fact]
-    public async Task DeleteBySKUIdAsync_ReturnsFalse_WhenNotFound()
-    {
-        var result = await _repository.DeleteBySKUIdAsync("MISSING");
+            await _repository.UpdateBySKUIdAsync("CLTH999", new Clothing { PartitionKey = "pk1", SKUMarker = "CLTH999", UnloadedDate = DateTime.UtcNow.AddDays(1) });
+            await _context.SaveChangesAsync();
 
-        Assert.False(result);
+            var result = await _context.Clothing.FindAsync("pk1");
+            Assert.Equal(item.UnloadedDate, result!.UnloadedDate);
+        }
+
+        [Fact]
+        public async Task DeleteBySKUIdAsync_ReturnsFalse_WhenNotFound()
+        {
+            var result = await _repository.DeleteBySKUIdAsync("CLTH999");
+
+            Assert.False(result);
+        }
+
+        [Fact]
+        public async Task DeleteBySKUIdAsync_ReturnsTrue_AndRemovesAllMatchingItems()
+        {
+            _context.Clothing.AddRange(
+                new Clothing { PartitionKey = "pk1", SKUMarker = "CLTH001", UnloadedDate = DateTime.UtcNow },
+                new Clothing { PartitionKey = "pk2", SKUMarker = "CLTH001", UnloadedDate = DateTime.UtcNow },
+                new Clothing { PartitionKey = "pk3", SKUMarker = "CLTH002", UnloadedDate = DateTime.UtcNow }
+            );
+            await _context.SaveChangesAsync();
+
+            var result = await _repository.DeleteBySKUIdAsync("CLTH001");
+            await _context.SaveChangesAsync();
+
+            Assert.True(result);
+            Assert.Equal(1, await _context.Clothing.CountAsync());
+        }
     }
 }

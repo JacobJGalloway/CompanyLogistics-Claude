@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using WarehouseInventory_Claude.Models;
 
@@ -17,14 +18,29 @@ namespace WarehouseInventory_Claude.Data
             modelBuilder.Entity<Tool>().HasKey(t => t.PartitionKey);
         }
 
-        public async Task<Clothing?> FindClothingBySKUAsync(string skuId)
+        public async Task<List<Clothing>> GetClothingBySKUIdsync(string skuId)
         {
-            var response = await Clothing.FirstOrDefaultAsync(c => c.SKUMarker == skuId);
+            var response = await Clothing.Where(c => c.SKUMarker == skuId).ToListAsync();
 
-            if (response is null || response == default(Clothing))
-            {
-                throw new KeyNotFoundException($"No clothing item found with SKU: {skuId}");
-            }
+            if (response.Count == 0) return new List<Clothing>();
+
+            return response;
+        }
+
+        public async Task<List<PPE>> GetPPEBySKUIdsync(string skuId)
+        {
+            var response = await PPE.Where(p => p.SKUMarker == skuId).ToListAsync();
+
+            if (response.Count == 0) return new List<PPE>();
+
+            return response;
+        }
+
+        public async Task<List<Tool>> GetToolBySKUIdsync(string skuId)
+        {
+            var response = await Tools.Where(t => t.SKUMarker == skuId).ToListAsync();
+
+            if (response.Count == 0) return new List<Tool>();
 
             return response;
         }

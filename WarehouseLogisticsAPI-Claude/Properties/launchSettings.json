@@ -7,7 +7,7 @@
       "applicationUrl": "https://localhost:7001;http://localhost:5001",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "WAREHOUSE_ID": "123",
+        "LOCATION_ID": "WH001",
         "LINE_ENTRIES_WORDING": "Inventory Updates"
       }
     }

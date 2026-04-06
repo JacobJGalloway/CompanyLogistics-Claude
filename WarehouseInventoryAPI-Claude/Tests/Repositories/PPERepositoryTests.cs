@@ -1,122 +1,152 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Xunit;
 using WarehouseInventory_Claude.Data;
 using WarehouseInventory_Claude.Data.Repositories;
 using WarehouseInventory_Claude.Models;
 
-namespace WarehouseInventory_Claude.Tests.Repositories;
-
-public class PPERepositoryTests : IDisposable
+namespace WarehouseInventory_Claude.Tests.Repositories
 {
-    private readonly SqliteConnection _connection;
-    private readonly InventoryContext _context;
-    private readonly PPERepository _repository;
-
-    public PPERepositoryTests()
+    public class PPERepositoryTests : IDisposable
     {
-        _connection = new SqliteConnection("DataSource=:memory:");
-        _connection.Open();
+        private readonly SqliteConnection _connection;
+        private readonly InventoryContext _context;
+        private readonly PPERepository _repository;
 
-        var options = new DbContextOptionsBuilder<InventoryContext>()
-            .UseSqlite(_connection)
-            .Options;
+        public PPERepositoryTests()
+        {
+            _connection = new SqliteConnection("DataSource=:memory:");
+            _connection.Open();
+            var options = new DbContextOptionsBuilder<InventoryContext>()
+                .UseSqlite(_connection)
+                .Options;
+            _context = new InventoryContext(options);
+            _context.Database.EnsureCreated();
+            _repository = new PPERepository(_context);
+        }
 
-        _context = new InventoryContext(options);
-        _context.Database.EnsureCreated();
-        _repository = new PPERepository(_context);
-    }
+        public void Dispose()
+        {
+            _context.Dispose();
+            _connection.Dispose();
+        }
 
-    public void Dispose()
-    {
-        _context.Dispose();
-        _connection.Dispose();
-    }
+        [Fact]
+        public async Task GetAllAsync_ReturnsAllItems()
+        {
+            _context.PPE.AddRange(
+                new PPE { PartitionKey = "pk1", SKUMarker = "SPPE001", UnloadedDate = DateTime.UtcNow },
+                new PPE { PartitionKey = "pk2", SKUMarker = "SPPE002", UnloadedDate = DateTime.UtcNow }
+            );
+            await _context.SaveChangesAsync();
 
-    [Fact]
-    public async Task GetAllAsync_ReturnsAllItems()
-    {
-        _context.PPE.AddRange(
-            new PPE { PartitionKey = "1", SKUMarker = "SKU001", Type = "Gloves", Size = "L" },
-            new PPE { PartitionKey = "2", SKUMarker = "SKU002", Type = "Helmet", Size = "M" }
-        );
-        await _context.SaveChangesAsync();
+            var result = await _repository.GetAllAsync();
 
-        var result = await _repository.GetAllAsync();
+            Assert.Equal(2, result.Count());
+        }
 
-        Assert.Equal(2, result.Count());
-    }
+        [Fact]
+        public async Task GetBySKUIdAsync_ReturnsMatchingItems_WhenFound()
+        {
+            _context.PPE.AddRange(
+                new PPE { PartitionKey = "pk1", SKUMarker = "SPPE001", UnloadedDate = DateTime.UtcNow },
+                new PPE { PartitionKey = "pk2", SKUMarker = "SPPE001", UnloadedDate = DateTime.UtcNow },
+                new PPE { PartitionKey = "pk3", SKUMarker = "SPPE002", UnloadedDate = DateTime.UtcNow }
+            );
+            await _context.SaveChangesAsync();
 
-    [Fact]
-    public async Task GetBySKUIdAsync_ReturnsItem_WhenFound()
-    {
-        _context.PPE.Add(new PPE { PartitionKey = "SKU001", SKUMarker = "SKU001", Type = "Gloves" });
-        await _context.SaveChangesAsync();
+            var result = await _repository.GetBySKUIdAsync("SPPE001");
 
-        var result = await _repository.GetBySKUIdAsync("SKU001");
+            Assert.Equal(2, result.Count);
+            Assert.All(result, p => Assert.Equal("SPPE001", p.SKUMarker));
+        }
 
-        Assert.NotNull(result);
-        Assert.Equal("SKU001", result.SKUMarker);
-    }
+        [Fact]
+        public async Task GetBySKUIdAsync_ReturnsEmptyList_WhenNotFound()
+        {
+            var result = await _repository.GetBySKUIdAsync("SPPE999");
 
-    [Fact]
-    public async Task GetBySKUIdAsync_ReturnsNull_WhenMissing()
-    {
-        var result = await _repository.GetBySKUIdAsync("MISSING");
+            Assert.Empty(result);
+        }
 
-        Assert.Null(result);
-    }
+        [Fact]
+        public async Task AddAsync_StagesItem_PersistedAfterSave()
+        {
+            var item = new PPE { PartitionKey = "pk1", SKUMarker = "SPPE001", UnloadedDate = DateTime.UtcNow };
 
-    [Fact]
-    public async Task AddAsync_PersistsAndReturnsItem()
-    {
-        var item = new PPE { PartitionKey = "1", SKUMarker = "SKU001", Type = "Gloves", Size = "L" };
+            await _repository.AddAsync(item);
+            await _context.SaveChangesAsync();
 
-        var result = await _repository.AddAsync(item);
+            Assert.Equal(1, await _context.PPE.CountAsync());
+        }
 
-        Assert.Equal("SKU001", result.SKUMarker);
-        Assert.Equal(1, _context.PPE.Count());
-    }
+        [Fact]
+        public async Task UpdateBySKUIdAsync_UpdatesByPartitionKey_WhenMatch()
+        {
+            var original = new PPE { PartitionKey = "pk1", SKUMarker = "SPPE001", UnloadedDate = DateTime.UtcNow };
+            var other = new PPE { PartitionKey = "pk2", SKUMarker = "SPPE001", UnloadedDate = DateTime.UtcNow };
+            _context.PPE.AddRange(original, other);
+            await _context.SaveChangesAsync();
 
-    [Fact]
-    public async Task UpdateBySKUIdAsync_UpdatesExistingItem()
-    {
-        _context.PPE.Add(new PPE { PartitionKey = "SKU001", SKUMarker = "SKU001", Type = "Gloves", Size = "M" });
-        await _context.SaveChangesAsync();
+            var updated = new PPE { PartitionKey = "pk1", SKUMarker = "SPPE001", UnloadedDate = DateTime.UtcNow.AddDays(1) };
+            await _repository.UpdateBySKUIdAsync("SPPE001", updated);
+            await _context.SaveChangesAsync();
 
-        var updated = new PPE { PartitionKey = "SKU001", SKUMarker = "SKU001", Type = "Gloves", Size = "L" };
-        await _repository.UpdateBySKUIdAsync("SKU001", updated);
+            var result = await _context.PPE.FindAsync("pk1");
+            Assert.Equal(updated.UnloadedDate, result!.UnloadedDate);
+        }
 
-        var result = await _context.PPE.FindAsync("SKU001");
-        Assert.Equal("L", result!.Size);
-    }
+        [Fact]
+        public async Task UpdateBySKUIdAsync_FallsBackToFirst_WhenNoPartitionKeyMatch()
+        {
+            var item = new PPE { PartitionKey = "pk1", SKUMarker = "SPPE001", UnloadedDate = DateTime.UtcNow };
+            _context.PPE.Add(item);
+            await _context.SaveChangesAsync();
 
-    [Fact]
-    public async Task UpdateBySKUIdAsync_DoesNothing_WhenSKUNotFound()
-    {
-        var exception = await Record.ExceptionAsync(() =>
-            _repository.UpdateBySKUIdAsync("MISSING", new PPE { SKUMarker = "MISSING" }));
+            var updated = new PPE { PartitionKey = "pk-nomatch", SKUMarker = "SPPE001", UnloadedDate = DateTime.UtcNow.AddDays(1) };
+            await _repository.UpdateBySKUIdAsync("SPPE001", updated);
+            await _context.SaveChangesAsync();
 
-        Assert.Null(exception);
-    }
+            var result = await _context.PPE.FindAsync("pk1");
+            Assert.Equal(updated.UnloadedDate, result!.UnloadedDate);
+        }
 
-    [Fact]
-    public async Task DeleteBySKUIdAsync_ReturnsTrueAndRemovesItem_WhenFound()
-    {
-        _context.PPE.Add(new PPE { PartitionKey = "SKU001", SKUMarker = "SKU001", Type = "Gloves" });
-        await _context.SaveChangesAsync();
+        [Fact]
+        public async Task UpdateBySKUIdAsync_DoesNothing_WhenSkuNotFound()
+        {
+            var item = new PPE { PartitionKey = "pk1", SKUMarker = "SPPE001", UnloadedDate = DateTime.UtcNow };
+            _context.PPE.Add(item);
+            await _context.SaveChangesAsync();
 
-        var result = await _repository.DeleteBySKUIdAsync("SKU001");
+            await _repository.UpdateBySKUIdAsync("SPPE999", new PPE { PartitionKey = "pk1", SKUMarker = "SPPE999", UnloadedDate = DateTime.UtcNow.AddDays(1) });
+            await _context.SaveChangesAsync();
 
-        Assert.True(result);
-        Assert.Equal(0, _context.PPE.Count());
-    }
+            var result = await _context.PPE.FindAsync("pk1");
+            Assert.Equal(item.UnloadedDate, result!.UnloadedDate);
+        }
 
-    [Fact]
-    public async Task DeleteBySKUIdAsync_ReturnsFalse_WhenNotFound()
-    {
-        var result = await _repository.DeleteBySKUIdAsync("MISSING");
+        [Fact]
+        public async Task DeleteBySKUIdAsync_ReturnsFalse_WhenNotFound()
+        {
+            var result = await _repository.DeleteBySKUIdAsync("SPPE999");
 
-        Assert.False(result);
+            Assert.False(result);
+        }
+
+        [Fact]
+        public async Task DeleteBySKUIdAsync_ReturnsTrue_AndRemovesAllMatchingItems()
+        {
+            _context.PPE.AddRange(
+                new PPE { PartitionKey = "pk1", SKUMarker = "SPPE001", UnloadedDate = DateTime.UtcNow },
+                new PPE { PartitionKey = "pk2", SKUMarker = "SPPE001", UnloadedDate = DateTime.UtcNow },
+                new PPE { PartitionKey = "pk3", SKUMarker = "SPPE002", UnloadedDate = DateTime.UtcNow }
+            );
+            await _context.SaveChangesAsync();
+
+            var result = await _repository.DeleteBySKUIdAsync("SPPE001");
+            await _context.SaveChangesAsync();
+
+            Assert.True(result);
+            Assert.Equal(1, await _context.PPE.CountAsync());
+        }
     }
 }
