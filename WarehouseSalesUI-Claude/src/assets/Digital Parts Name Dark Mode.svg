@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="136mm"
+   height="23mm"
+   viewBox="0 0 136 23"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.3 (0d15f75, 2025-12-25)"
+   sodipodi:docname="Digital Parts Name DarkMode.svg"
+   inkscape:export-filename="Digital Parts Name DarkMode.png"
+   inkscape:export-xdpi="25.4"
+   inkscape:export-ydpi="25.4"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#3b3a3c"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="2.0535659"
+     inkscape:cx="251.51372"
+     inkscape:cy="104.93941"
+     inkscape:window-width="1920"
+     inkscape:window-height="1057"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1"
+     inkscape:export-bgcolor="#3b3a3cff" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <g
+       id="g5"
+       transform="translate(-10.078697,-77.5764)">
+      <text
+         xml:space="preserve"
+         style="font-size:13.5116px;line-height:1.25;font-family:'Dune Rise';-inkscape-font-specification:'Dune Rise';letter-spacing:0px;word-spacing:0px;fill:#3a73c1;fill-opacity:1;stroke-width:0.253342"
+         x="9.3793736"
+         y="85.123131"
+         id="text2"
+         transform="scale(0.95751551,1.0443695)"><tspan
+           sodipodi:role="line"
+           id="tspan2"
+           style="fill:#3a73c1;fill-opacity:1;stroke-width:0.253342"
+           x="9.3793736"
+           y="85.123131">Digital</tspan></text>
+      <text
+         xml:space="preserve"
+         style="font-size:13.1794px;line-height:1.25;font-family:'Dune Rise';-inkscape-font-specification:'Dune Rise';letter-spacing:0px;word-spacing:0px;fill:#3a73c1;fill-opacity:1;stroke-width:0.247114"
+         x="92.119469"
+         y="83.030563"
+         id="text3"
+         transform="scale(0.93397706,1.0706901)"><tspan
+           sodipodi:role="line"
+           id="tspan3"
+           style="fill:#3a73c1;fill-opacity:1;stroke-width:0.247114"
+           x="92.119469"
+           y="83.030563">PARTS</tspan></text>
+      <text
+         xml:space="preserve"
+         style="font-size:8.39933px;line-height:1.25;font-family:'Dune Rise';-inkscape-font-specification:'Dune Rise';letter-spacing:0px;word-spacing:0px;fill:#eeeeee;fill-opacity:1;stroke-width:0.28634"
+         x="8.6784401"
+         y="108.80964"
+         id="text4"
+         transform="scale(1.0822343,0.92401435)"><tspan
+           sodipodi:role="line"
+           id="tspan4"
+           style="fill:#eeeeee;fill-opacity:1;stroke-width:0.28634"
+           x="8.6784401"
+           y="108.80964">Logistics</tspan></text>
+      <text
+         xml:space="preserve"
+         style="font-size:8.34872px;line-height:1.25;font-family:'Dune Rise';-inkscape-font-specification:'Dune Rise';letter-spacing:0px;word-spacing:0px;fill:#eeeeee;fill-opacity:1;stroke-width:0.284615"
+         x="77.733231"
+         y="108.15399"
+         id="text5"
+         transform="scale(1.0757131,0.9296159)"><tspan
+           sodipodi:role="line"
+           id="tspan5"
+           style="fill:#eeeeee;fill-opacity:1;stroke-width:0.284615"
+           x="77.733231"
+           y="108.15399">COMPANY</tspan></text>
+    </g>
+  </g>
+</svg>
