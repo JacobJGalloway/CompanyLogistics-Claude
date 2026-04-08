@@ -15,6 +15,6 @@ namespace WarehouseLogistics_Claude.Models
         public string CustomerLastName { get; set; } = string.Empty;
         public string City { get; set; } = string.Empty;
         public string State { get; set; } = string.Empty;
-        public required List<LineEntry> LineEntries { get; set; }
+        public required List<LineEntry> LineEntries { get; set; } = [];
     }
 }

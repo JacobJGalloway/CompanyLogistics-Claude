@@ -12,6 +12,22 @@ namespace WarehouseLogistics_Claude.Controllers
     {
         private readonly IBillOfLadingService _billOfLadingService = billOfLadingService;
 
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<BillOfLading>>> GetAllAsync()
+            => Ok(await _billOfLadingService.GetAllAsync());
+
+        [HttpGet("{transactionId}")]
+        public async Task<ActionResult<BillOfLading>> GetByTransactionIdAsync(string transactionId)
+        {
+            var bol = await _billOfLadingService.GetByTransactionIdAsync(transactionId);
+            if (bol is null) return NotFound();
+            return Ok(bol);
+        }
+
+        [HttpGet("{transactionId}/line-entry")]
+        public async Task<ActionResult<List<LineEntry>>> GetLineEntriesAsync(string transactionId)
+            => Ok(await _billOfLadingService.GetLineEntriesByTransactionIdAsync(transactionId));
+
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] BillOfLading billOfLading)
         {

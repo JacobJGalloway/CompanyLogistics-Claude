@@ -58,6 +58,20 @@ namespace WarehouseLogistics_Claude.Services
             await _unitOfWork.SaveChangesAsync();
         }
 
+        public async Task<IEnumerable<BillOfLading>> GetAllAsync()
+            => await _unitOfWork.BillsOfLading.GetAllAsync();
+
+        public async Task<BillOfLading?> GetByTransactionIdAsync(string transactionId)
+        {
+            var bol = await _unitOfWork.BillsOfLading.GetByTransactionIdAsync(transactionId);
+            if (bol is null) return null;
+            bol.LineEntries = await _unitOfWork.LineEntries.GetLineEntriesByTransactionIdAsync(transactionId);
+            return bol;
+        }
+
+        public async Task<List<LineEntry>> GetLineEntriesByTransactionIdAsync(string transactionId)
+            => await _unitOfWork.LineEntries.GetLineEntriesByTransactionIdAsync(transactionId);
+
         private async Task PersistLineEntriesAsync(string transactionId, List<LineEntry> lineEntries)
         {
             foreach (var lineEntry in lineEntries)
