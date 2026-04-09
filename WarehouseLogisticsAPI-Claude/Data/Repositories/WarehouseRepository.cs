@@ -4,13 +4,11 @@ using WarehouseLogistics_Claude.Models;
 
 namespace WarehouseLogistics_Claude.Data.Repositories
 {
-    public class WarehouseRepository(LogisticsContext context) : IWarehouseRepository
+    public class WarehouseRepository(LogisticsReadContext readContext) : IWarehouseRepository
     {
-        private readonly LogisticsContext _context = context;
-
         public async Task<IEnumerable<Warehouse>> GetAllAsync()
         {
-            return await _context.Warehouses.ToListAsync();
+            return await readContext.Warehouses.AsNoTracking().ToListAsync();
         }
     }
 }

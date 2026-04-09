@@ -4,31 +4,34 @@ using WarehouseInventory_Claude.Models;
 
 namespace WarehouseInventory_Claude.Data.Repositories
 {
-    public class ToolRepository(InventoryContext context) : IToolRepository
+    public class ToolRepository(InventoryContext writeContext, InventoryReadContext readContext) : IToolRepository
     {
-        private readonly InventoryContext _context = context;
-
         public async Task<IEnumerable<Tool>> GetAllAsync()
         {
-            return await _context.Tool.ToListAsync();
+            return await readContext.Tool.AsNoTracking().ToListAsync();
         }
 
         public async Task<List<Tool>> GetBySKUIdAsync(string skuId)
         {
-            return await _context.GetToolBySKUIdsync(skuId);
+            return await readContext.Tool
+                .Where(t => t.SKUMarker == skuId)
+                .AsNoTracking()
+                .ToListAsync();
         }
 
         public async Task<List<Tool>> GetByLocationAsync(string locationId)
         {
-            return await _context.Tool
+            return await readContext.Tool
                 .Where(t => t.LocationId == locationId)
+                .AsNoTracking()
                 .ToListAsync();
         }
 
         public async Task<List<Tool>> GetByLocationAndSKUAsync(string locationId, string skuId)
         {
-            return await _context.Tool
+            return await readContext.Tool
                 .Where(t => t.LocationId == locationId && t.SKUMarker == skuId)
+                .AsNoTracking()
                 .ToListAsync();
         }
 
@@ -37,13 +40,15 @@ namespace WarehouseInventory_Claude.Data.Repositories
             var warehouseId = Environment.GetEnvironmentVariable("LOCATION_ID") ?? string.Empty;
             item.LocationId = warehouseId;
             item.PartitionKey = $"{warehouseId}-{item.SKUMarker}-{Guid.NewGuid():N}";
-            _context.Tool.Add(item);
+            writeContext.Tool.Add(item);
             return item;
         }
 
         public async Task UpdateBySKUIdAsync(string skuId, Tool item)
         {
-            var existingItems = await GetBySKUIdAsync(skuId);
+            var existingItems = await writeContext.Tool
+                .Where(t => t.SKUMarker == skuId)
+                .ToListAsync();
             if (existingItems.Count == 0) return;
 
             var target = existingItems.FirstOrDefault(t => t.PartitionKey == item.PartitionKey)
@@ -56,7 +61,7 @@ namespace WarehouseInventory_Claude.Data.Repositories
 
         public async Task PatchAsync(string partitionKey, bool? projected, DateTime? unloadedDate)
         {
-            var target = await _context.Tool.FindAsync(partitionKey);
+            var target = await writeContext.Tool.FindAsync(partitionKey);
             if (target is null) return;
 
             if (projected.HasValue) target.Projected = projected.Value;
@@ -65,17 +70,19 @@ namespace WarehouseInventory_Claude.Data.Repositories
 
         public async Task<bool> DeleteBySKUIdAsync(string skuId)
         {
-            List<Tool> items = await _context.Tool.Where(t => t.SKUMarker == skuId).ToListAsync();
+            var items = await writeContext.Tool
+                .Where(t => t.SKUMarker == skuId)
+                .ToListAsync();
             if (items.Count == 0) return false;
-            _context.Tool.RemoveRange(items);
+            writeContext.Tool.RemoveRange(items);
             return true;
         }
+
         public async Task<bool> DeleteByPartitionKeyAsync(string partitionKey)
         {
-            var target = await _context.Tool.FindAsync(partitionKey);
+            var target = await writeContext.Tool.FindAsync(partitionKey);
             if (target is null) return false;
-
-            _context.Tool.Remove(target);
+            writeContext.Tool.Remove(target);
             return true;
         }
     }

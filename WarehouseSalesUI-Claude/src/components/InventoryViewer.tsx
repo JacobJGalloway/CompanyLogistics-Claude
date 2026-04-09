@@ -1,65 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useApiClients } from '../hooks/useApiClients'
 import type { Warehouse, Store, InventoryItem, InventoryType, LocationType } from '../types'
+import styles from './InventoryViewer.module.css'
 
 const INVENTORY_TYPES: InventoryType[] = ['Clothing', 'PPE', 'Tool']
-
-function MultiSelectDropdown({
-  options,
-  selected,
-  onToggle,
-}: {
-  options: InventoryType[]
-  selected: InventoryType[]
-  onToggle: (type: InventoryType) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  const label = selected.length === 0
-    ? '-- Select --'
-    : selected.length === options.length
-      ? 'All Types'
-      : selected.join(', ')
-
-  return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        style={{ minWidth: '160px', textAlign: 'left', padding: '0.2rem 0.4rem', cursor: 'pointer' }}
-      >
-        {label} ▾
-      </button>
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, zIndex: 10,
-          background: 'var(--surface)', border: '1px solid var(--table-border)', borderRadius: '4px',
-          padding: '0.4rem 0', minWidth: '160px', boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
-        }}>
-          {options.map(type => (
-            <label key={type} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0.8rem', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={selected.includes(type)}
-                onChange={() => onToggle(type)}
-              />
-              {type}
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
+const PAGE_SIZE = 50
 
 export default function InventoryViewer() {
   const { inventory, logistics } = useApiClients()
@@ -68,9 +13,10 @@ export default function InventoryViewer() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [stores, setStores] = useState<Store[]>([])
   const [selectedLocationId, setSelectedLocationId] = useState('')
-  const [selectedTypes, setSelectedTypes] = useState<InventoryType[]>([...INVENTORY_TYPES])
   const [projectedFilter, setProjectedFilter] = useState<'All' | 'Yes' | 'No'>('All')
-  const [results, setResults] = useState<{ type: InventoryType; items: InventoryItem[] }[]>([])
+  const [results, setResults] = useState<Map<InventoryType, InventoryItem[]>>(new Map())
+  const [activeTab, setActiveTab] = useState<InventoryType>('Clothing')
+  const [currentPage, setCurrentPage] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -81,31 +27,32 @@ export default function InventoryViewer() {
       logistics.get<Store[]>('/api/Store').then(setStores).catch(() => setStores([]))
     }
     setSelectedLocationId('')
-    setResults([])
+    setResults(new Map())
   }, [locationType])
 
-  function toggleType(type: InventoryType) {
-    setSelectedTypes(prev =>
-      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
-    )
+  function handleTabChange(tab: InventoryType) {
+    setActiveTab(tab)
+    setCurrentPage(1)
   }
 
   async function handleSearch() {
-    if (!selectedLocationId || selectedTypes.length === 0) return
+    if (!selectedLocationId) return
     setLoading(true)
     setError('')
     try {
-      const fetches = selectedTypes.map(async type => {
-        const endpoint = `/api/${type}/location/${selectedLocationId}`
-        const items = await inventory.get<InventoryItem[]>(endpoint)
-        return { type, items }
+      const fetches = INVENTORY_TYPES.map(async type => {
+        const items = await inventory.get<InventoryItem[]>(`/api/${type}/location/${selectedLocationId}`)
+        return [type, items] as const
       })
-      const raw = await Promise.all(fetches)
-      setResults(raw.map(({ type, items }) => ({
-        type,
-        items: projectedFilter === 'All' ? items
-          : items.filter(i => i.projected === (projectedFilter === 'Yes')),
-      })))
+      const entries = await Promise.all(fetches)
+      const filtered = new Map(
+        entries.map(([type, items]) => [
+          type,
+          projectedFilter === 'All' ? items : items.filter(i => i.projected === (projectedFilter === 'Yes')),
+        ])
+      )
+      setResults(filtered)
+      setCurrentPage(1)
     } catch {
       setError('Failed to load inventory.')
     } finally {
@@ -118,11 +65,16 @@ export default function InventoryViewer() {
       ? warehouses.map(w => ({ id: w.warehouseId, label: `${w.warehouseId} — ${w.city}, ${w.state}` }))
       : stores.map(s => ({ id: s.storeId, label: `${s.storeId} — ${s.city}, ${s.state}` }))
 
+  const activeItems = results.get(activeTab) ?? []
+  const totalPages = Math.max(1, Math.ceil(activeItems.length / PAGE_SIZE))
+  const pageItems = activeItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const hasResults = results.size > 0
+
   return (
-    <div style={{ marginTop: '1.5rem' }}>
+    <div className={styles.wrapper}>
       <h2>Inventory Viewer</h2>
 
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+      <div className={styles.controls}>
         <label>
           Location Type
           <br />
@@ -158,51 +110,68 @@ export default function InventoryViewer() {
           </select>
         </label>
 
-        <div>
-          Inventory Types
-          <br />
-          <MultiSelectDropdown
-            options={INVENTORY_TYPES}
-            selected={selectedTypes}
-            onToggle={toggleType}
-          />
-        </div>
-
-        <button onClick={handleSearch} disabled={!selectedLocationId || selectedTypes.length === 0 || loading}>
+        <button onClick={handleSearch} disabled={!selectedLocationId || loading}>
           {loading ? 'Loading...' : 'Search'}
         </button>
       </div>
 
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {error && <p className={styles.error}>{error}</p>}
 
-      {results.map(({ type, items }) => (
-        <div key={type} style={{ marginTop: '1.5rem' }}>
-          <h3>{type} ({items.length})</h3>
-          {items.length === 0 ? (
+      {hasResults && (
+        <>
+          <div className={styles.tabs}>
+            {INVENTORY_TYPES.map(type => (
+              <button
+                key={type}
+                type="button"
+                className={`${styles.tab} ${activeTab === type ? styles.tabActive : ''}`}
+                onClick={() => handleTabChange(type)}
+              >
+                {type}
+                <span className={styles.tabCount}>({results.get(type)?.length ?? 0})</span>
+              </button>
+            ))}
+          </div>
+
+          {pageItems.length === 0 ? (
             <p>No items found.</p>
           ) : (
-            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-              <thead>
-                <tr>
-                  {['SKU', 'Unloaded Date', 'Projected', 'Location'].map(h => (
-                    <th key={h} style={{ border: '1px solid var(--table-border)', padding: '0.4rem 0.8rem', textAlign: 'left', background: 'var(--surface)' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map(item => (
-                  <tr key={item.partitionKey}>
-                    <td style={{ border: '1px solid var(--table-border)', padding: '0.4rem 0.8rem', background: 'var(--surface)' }}>{item.skuMarker}</td>
-                    <td style={{ border: '1px solid var(--table-border)', padding: '0.4rem 0.8rem', background: 'var(--surface)' }}>{new Date(item.unloadedDate).toLocaleDateString()}</td>
-                    <td style={{ border: '1px solid var(--table-border)', padding: '0.4rem 0.8rem', background: 'var(--surface)' }}>{item.projected ? 'Yes' : 'No'}</td>
-                    <td style={{ border: '1px solid var(--table-border)', padding: '0.4rem 0.8rem', background: 'var(--surface)' }}>{item.locationId}</td>
+            <>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    {['SKU', 'Unloaded Date', 'Projected', 'Location'].map(h => (
+                      <th key={h} className={styles.th}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {pageItems.map(item => (
+                    <tr key={item.partitionKey}>
+                      <td className={styles.td}>{item.skuMarker}</td>
+                      <td className={styles.td}>{new Date(item.unloadedDate).toLocaleDateString()}</td>
+                      <td className={styles.td}>{item.projected ? 'Yes' : 'No'}</td>
+                      <td className={styles.td}>{item.locationId}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {totalPages > 1 && (
+                <div className={styles.pagination}>
+                  <button onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}>
+                    Prev
+                  </button>
+                  <span className={styles.pageInfo}>Page {currentPage} of {totalPages}</span>
+                  <button onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages}>
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
           )}
-        </div>
-      ))}
+        </>
+      )}
     </div>
   )
 }

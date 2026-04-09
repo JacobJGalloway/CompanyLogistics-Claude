@@ -1,28 +1,17 @@
 .page {
-  padding: 1rem;
-  text-align: left;
+  composes: page from '../styles/base.module.css';
 }
 
 .table {
-  border-collapse: collapse;
-  width: 100%;
-  margin-top: 1rem;
+  composes: table from '../styles/base.module.css';
 }
 
 .th {
-  border: 1px solid var(--table-border);
-  padding: 0.4rem 0.8rem;
-  background: var(--surface);
-  color: var(--text-h);
-  font-weight: 600;
-  text-align: left;
+  composes: th from '../styles/base.module.css';
 }
 
 .td {
-  border: 1px solid var(--table-border);
-  padding: 0.4rem 0.8rem;
-  background: var(--surface);
-  color: var(--text-h);
+  composes: td from '../styles/base.module.css';
 }
 
 .tdCenter {
@@ -36,48 +25,22 @@
 }
 
 .overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
+  composes: overlay from '../styles/base.module.css';
 }
 
 .modal {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1.5rem;
+  composes: modal from '../styles/base.module.css';
   min-width: 560px;
-  max-width: 90vw;
-  max-height: 80vh;
-  overflow-y: auto;
-  position: relative;
 }
 
 .closeBtn {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.2rem;
-  color: var(--text-h);
-
-  &:hover {
-    opacity: 0.7;
-  }
+  composes: closeBtn from '../styles/base.module.css';
 }
 
 .modalTitle {
-  margin-top: 0;
-  margin-bottom: 1rem;
+  composes: modalTitle from '../styles/base.module.css';
 }
 
 .modalFooter {
-  margin-top: 1rem;
-  text-align: right;
+  composes: modalFooter from '../styles/base.module.css';
 }

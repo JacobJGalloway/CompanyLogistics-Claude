@@ -4,30 +4,29 @@ using WarehouseLogistics_Claude.Models;
 
 namespace WarehouseLogistics_Claude.Data.Repositories
 {
-    public class BillOfLadingRepository(LogisticsContext context) : IBillOfLadingRepository
+    public class BillOfLadingRepository(LogisticsContext writeContext, LogisticsReadContext readContext) : IBillOfLadingRepository
     {
-        private readonly LogisticsContext _context = context;
-
         public async Task<IEnumerable<BillOfLading>> GetAllAsync()
         {
-            return await _context.BillsOfLading.ToListAsync();
+            return await readContext.BillsOfLading.AsNoTracking().ToListAsync();
         }
 
         public async Task<BillOfLading?> GetByTransactionIdAsync(string transactionId)
         {
-            return await _context.BillsOfLading
+            return await readContext.BillsOfLading
+                .AsNoTracking()
                 .FirstOrDefaultAsync(b => b.TransactionId == transactionId);
         }
 
         public async Task<BillOfLading> AddAsync(BillOfLading billOfLading)
         {
-            _context.BillsOfLading.Add(billOfLading);
+            writeContext.BillsOfLading.Add(billOfLading);
             return billOfLading;
         }
 
         public async Task UpdateAsync(BillOfLading billOfLading)
         {
-            var target = await _context.BillsOfLading
+            var target = await writeContext.BillsOfLading
                 .FirstOrDefaultAsync(b => b.TransactionId == billOfLading.TransactionId);
             if (target is null) return;
 
@@ -40,11 +39,11 @@ namespace WarehouseLogistics_Claude.Data.Repositories
 
         public async Task<bool> DeleteByTransactionIdAsync(string transactionId)
         {
-            var target = await _context.BillsOfLading
+            var target = await writeContext.BillsOfLading
                 .FirstOrDefaultAsync(b => b.TransactionId == transactionId);
             if (target is null) return false;
 
-            _context.BillsOfLading.Remove(target);
+            writeContext.BillsOfLading.Remove(target);
             return true;
         }
     }

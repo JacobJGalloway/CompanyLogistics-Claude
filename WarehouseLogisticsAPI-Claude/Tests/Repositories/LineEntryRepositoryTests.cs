@@ -11,23 +11,29 @@ namespace WarehouseLogistics_Claude.Tests.Repositories
     {
         private readonly SqliteConnection _connection;
         private readonly LogisticsContext _context;
+        private readonly LogisticsReadContext _readContext;
         private readonly LineEntryRepository _repository;
 
         public LineEntryRepositoryTests()
         {
             _connection = new SqliteConnection("DataSource=:memory:");
             _connection.Open();
-            var options = new DbContextOptionsBuilder<LogisticsContext>()
+            var writeOptions = new DbContextOptionsBuilder<LogisticsContext>()
                 .UseSqlite(_connection)
                 .Options;
-            _context = new LogisticsContext(options);
+            var readOptions = new DbContextOptionsBuilder<LogisticsReadContext>()
+                .UseSqlite(_connection)
+                .Options;
+            _context = new LogisticsContext(writeOptions);
             _context.Database.EnsureCreated();
-            _repository = new LineEntryRepository(_context);
+            _readContext = new LogisticsReadContext(readOptions);
+            _repository = new LineEntryRepository(_context, _readContext);
         }
 
         public void Dispose()
         {
             _context.Dispose();
+            _readContext.Dispose();
             _connection.Dispose();
         }
 

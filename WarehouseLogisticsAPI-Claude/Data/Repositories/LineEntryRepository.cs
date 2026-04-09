@@ -4,53 +4,52 @@ using WarehouseLogistics_Claude.Models;
 
 namespace WarehouseLogistics_Claude.Data.Repositories
 {
-    public class LineEntryRepository(LogisticsContext context) : ILineEntryRepository
+    public class LineEntryRepository(LogisticsContext writeContext, LogisticsReadContext readContext) : ILineEntryRepository
     {
-        private readonly LogisticsContext _context = context;
-
         public async Task<IEnumerable<LineEntry>> GetAllAsync()
         {
-            return await _context.LineEntries.ToListAsync();
+            return await readContext.LineEntries.AsNoTracking().ToListAsync();
         }
 
         public async Task<List<LineEntry>> GetLineEntriesByTransactionIdAsync(string transactionId)
         {
-            return await _context.LineEntries
+            return await readContext.LineEntries
                 .Where(le => le.TransactionId == transactionId)
+                .AsNoTracking()
                 .ToListAsync();
         }
 
         public async Task<LineEntry> AddAsync(LineEntry lineEntry)
         {
             lineEntry.PartitionKey = $"{lineEntry.TransactionId}-{Guid.NewGuid():N}";
-            _context.LineEntries.Add(lineEntry);
+            writeContext.LineEntries.Add(lineEntry);
             return lineEntry;
         }
 
         public async Task UpdateLineEntryAsync(LineEntry lineEntry)
         {
-            _context.LineEntries.Update(lineEntry);
+            writeContext.LineEntries.Update(lineEntry);
         }
 
         public async Task<bool> DeleteByTransactionIdAsync(string transactionId)
         {
-            var entries = await _context.LineEntries
+            var entries = await writeContext.LineEntries
                 .Where(le => le.TransactionId == transactionId)
                 .ToListAsync();
             if (entries.Count == 0) return false;
 
-            _context.LineEntries.RemoveRange(entries);
+            writeContext.LineEntries.RemoveRange(entries);
             return true;
         }
 
         public async Task<bool> DeleteByLocationAsync(string transactionId, string locationId)
         {
-            var entries = await _context.LineEntries
+            var entries = await writeContext.LineEntries
                 .Where(le => le.TransactionId == transactionId && le.LocationId == locationId)
                 .ToListAsync();
             if (entries.Count == 0) return false;
 
-            _context.LineEntries.RemoveRange(entries);
+            writeContext.LineEntries.RemoveRange(entries);
             return true;
         }
     }

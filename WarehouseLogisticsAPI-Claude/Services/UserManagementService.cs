@@ -7,6 +7,10 @@ using WarehouseLogistics_Claude.Services.Interfaces;
 
 namespace WarehouseLogistics_Claude.Services
 {
+    // No unit tests for this service — it is a thin wrapper around the Auth0 Management SDK.
+    // All logic lives in ManagementApiClient/AuthenticationApiClient; mocking those would only
+    // test the mock, not this code. UserController tests cover the controller-layer behavior
+    // (BadRequest on ArgumentException, etc.). Integration testing this requires a live Auth0 tenant.
     public class UserManagementService : IUserManagementService
     {
         private readonly string _domain;

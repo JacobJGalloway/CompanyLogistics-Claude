@@ -12,23 +12,29 @@ namespace WarehouseInventory_Claude.Tests.Repositories
     {
         private readonly SqliteConnection _connection;
         private readonly InventoryContext _context;
+        private readonly InventoryReadContext _readContext;
         private readonly PPERepository _repository;
 
         public PPERepositoryTests()
         {
             _connection = new SqliteConnection("DataSource=:memory:");
             _connection.Open();
-            var options = new DbContextOptionsBuilder<InventoryContext>()
+            var writeOptions = new DbContextOptionsBuilder<InventoryContext>()
                 .UseSqlite(_connection)
                 .Options;
-            _context = new InventoryContext(options);
+            var readOptions = new DbContextOptionsBuilder<InventoryReadContext>()
+                .UseSqlite(_connection)
+                .Options;
+            _context = new InventoryContext(writeOptions);
             _context.Database.EnsureCreated();
-            _repository = new PPERepository(_context);
+            _readContext = new InventoryReadContext(readOptions);
+            _repository = new PPERepository(_context, _readContext);
         }
 
         public void Dispose()
         {
             _context.Dispose();
+            _readContext.Dispose();
             _connection.Dispose();
         }
 

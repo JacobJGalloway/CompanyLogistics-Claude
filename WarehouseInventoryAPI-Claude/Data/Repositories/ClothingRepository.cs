@@ -4,35 +4,34 @@ using WarehouseInventory_Claude.Models;
 
 namespace WarehouseInventory_Claude.Data.Repositories
 {
-    public class ClothingRepository(InventoryContext context) : IClothingRepository
+    public class ClothingRepository(InventoryContext writeContext, InventoryReadContext readContext) : IClothingRepository
     {
-        private readonly InventoryContext _context = context;
-
         public async Task<IEnumerable<Clothing>> GetAllAsync()
         {
-            return await _context.Clothing.ToListAsync();
+            return await readContext.Clothing.AsNoTracking().ToListAsync();
         }
 
         public async Task<List<Clothing>> GetBySKUIdAsync(string skuId)
         {
-            var items = await _context.GetClothingBySKUIdsync(skuId);
-            
-            if (items.Count == 0) return new List<Clothing>();
-
-            return items;
+            return await readContext.Clothing
+                .Where(c => c.SKUMarker == skuId)
+                .AsNoTracking()
+                .ToListAsync();
         }
 
         public async Task<List<Clothing>> GetByLocationAsync(string locationId)
         {
-            return await _context.Clothing
+            return await readContext.Clothing
                 .Where(c => c.LocationId == locationId)
+                .AsNoTracking()
                 .ToListAsync();
         }
 
         public async Task<List<Clothing>> GetByLocationAndSKUAsync(string locationId, string skuId)
         {
-            return await _context.Clothing
+            return await readContext.Clothing
                 .Where(c => c.LocationId == locationId && c.SKUMarker == skuId)
+                .AsNoTracking()
                 .ToListAsync();
         }
 
@@ -41,13 +40,15 @@ namespace WarehouseInventory_Claude.Data.Repositories
             var warehouseId = Environment.GetEnvironmentVariable("LOCATION_ID") ?? string.Empty;
             item.LocationId = warehouseId;
             item.PartitionKey = $"{warehouseId}-{item.SKUMarker}-{Guid.NewGuid():N}";
-            _context.Clothing.Add(item);
+            writeContext.Clothing.Add(item);
             return item;
         }
 
         public async Task UpdateBySKUIdAsync(string skuId, Clothing item)
         {
-            var existingItems = await GetBySKUIdAsync(skuId);
+            var existingItems = await writeContext.Clothing
+                .Where(c => c.SKUMarker == skuId)
+                .ToListAsync();
             if (existingItems.Count == 0) return;
 
             var target = existingItems.FirstOrDefault(c => c.PartitionKey == item.PartitionKey)
@@ -60,7 +61,7 @@ namespace WarehouseInventory_Claude.Data.Repositories
 
         public async Task PatchAsync(string partitionKey, bool? projected, DateTime? unloadedDate)
         {
-            var target = await _context.Clothing.FindAsync(partitionKey);
+            var target = await writeContext.Clothing.FindAsync(partitionKey);
             if (target is null) return;
 
             if (projected.HasValue) target.Projected = projected.Value;
@@ -69,17 +70,19 @@ namespace WarehouseInventory_Claude.Data.Repositories
 
         public async Task<bool> DeleteBySKUIdAsync(string skuId)
         {
-            List<Clothing> items = await _context.Clothing.Where(c => c.SKUMarker == skuId).ToListAsync();
+            var items = await writeContext.Clothing
+                .Where(c => c.SKUMarker == skuId)
+                .ToListAsync();
             if (items.Count == 0) return false;
-            _context.Clothing.RemoveRange(items);
+            writeContext.Clothing.RemoveRange(items);
             return true;
         }
+
         public async Task<bool> DeleteByPartitionKeyAsync(string partitionKey)
         {
-            var target = await _context.Clothing.FindAsync(partitionKey);
+            var target = await writeContext.Clothing.FindAsync(partitionKey);
             if (target is null) return false;
-
-            _context.Clothing.Remove(target);
+            writeContext.Clothing.Remove(target);
             return true;
         }
     }

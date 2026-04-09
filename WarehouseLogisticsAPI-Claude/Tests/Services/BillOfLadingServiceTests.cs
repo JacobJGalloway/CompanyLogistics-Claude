@@ -121,5 +121,101 @@ namespace WarehouseLogistics_Claude.Tests.Services
 
             _mockUoW.Verify(u => u.SaveChangesAsync(), Times.Never);
         }
+
+        [Fact]
+        public async Task GetAllAsync_ReturnsBOLs()
+        {
+            var bols = new List<BillOfLading> { MakeValidBOL() };
+            _mockBOLRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(bols);
+
+            var result = await _service.GetAllAsync();
+
+            Assert.Single(result);
+        }
+
+        [Fact]
+        public async Task GetByTransactionIdAsync_ReturnsNull_WhenNotFound()
+        {
+            _mockBOLRepo.Setup(r => r.GetByTransactionIdAsync("txn999")).ReturnsAsync((BillOfLading?)null);
+
+            var result = await _service.GetByTransactionIdAsync("txn999");
+
+            Assert.Null(result);
+        }
+
+        [Fact]
+        public async Task GetByTransactionIdAsync_AttachesLineEntries_WhenFound()
+        {
+            var bol = MakeValidBOL();
+            bol.TransactionId = "txn001";
+            var entries = new List<LineEntry>
+            {
+                new() { TransactionId = "txn001", LocationId = "WH001", SKUMarker = "CLTH001", Quantity = 5 }
+            };
+            _mockBOLRepo.Setup(r => r.GetByTransactionIdAsync("txn001")).ReturnsAsync(bol);
+            _mockLineEntryRepo.Setup(r => r.GetLineEntriesByTransactionIdAsync("txn001")).ReturnsAsync(entries);
+
+            var result = await _service.GetByTransactionIdAsync("txn001");
+
+            Assert.NotNull(result);
+            Assert.Single(result!.LineEntries);
+        }
+
+        [Fact]
+        public async Task GetLineEntriesByTransactionIdAsync_ReturnsEntries()
+        {
+            var entries = new List<LineEntry>
+            {
+                new() { TransactionId = "txn001", LocationId = "WH001", SKUMarker = "CLTH001", Quantity = 5 }
+            };
+            _mockLineEntryRepo.Setup(r => r.GetLineEntriesByTransactionIdAsync("txn001")).ReturnsAsync(entries);
+
+            var result = await _service.GetLineEntriesByTransactionIdAsync("txn001");
+
+            Assert.Single(result);
+        }
+
+        [Fact]
+        public async Task ReplaceLocationStopAsync_ThrowsArgumentException_WhenNoEntriesForLocation()
+        {
+            _mockLineEntryRepo.Setup(r => r.GetLineEntriesByTransactionIdAsync("txn001"))
+                .ReturnsAsync([]);
+
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                _service.ReplaceLocationStopAsync("txn001", "ST9999", "ST0001"));
+        }
+
+        [Fact]
+        public async Task ReplaceLocationStopAsync_ThrowsInvalidOperationException_WhenAlreadyProcessed()
+        {
+            var entries = new List<LineEntry>
+            {
+                new() { TransactionId = "txn001", LocationId = "WH001", SKUMarker = "CLTH001", Quantity = 5, IsProcessed = true }
+            };
+            _mockLineEntryRepo.Setup(r => r.GetLineEntriesByTransactionIdAsync("txn001")).ReturnsAsync(entries);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                _service.ReplaceLocationStopAsync("txn001", "WH001", "ST0001"));
+        }
+
+        [Fact]
+        public async Task ReplaceLocationStopAsync_AddsNewEntries_DeletesOld_AndSaves()
+        {
+            var entries = new List<LineEntry>
+            {
+                new() { TransactionId = "txn001", LocationId = "WH001", SKUMarker = "CLTH001", Quantity = 5, IsProcessed = false },
+                new() { TransactionId = "txn001", LocationId = "WH001", SKUMarker = "SPPE001", Quantity = 2, IsProcessed = false },
+            };
+            _mockLineEntryRepo.Setup(r => r.GetLineEntriesByTransactionIdAsync("txn001")).ReturnsAsync(entries);
+            _mockLineEntryRepo.Setup(r => r.AddAsync(It.IsAny<LineEntry>())).ReturnsAsync((LineEntry e) => e);
+            _mockLineEntryRepo.Setup(r => r.DeleteByLocationAsync("txn001", "WH001")).ReturnsAsync(true);
+            _mockUoW.Setup(u => u.SaveChangesAsync()).ReturnsAsync(1);
+
+            await _service.ReplaceLocationStopAsync("txn001", "WH001", "ST0001");
+
+            _mockLineEntryRepo.Verify(r => r.AddAsync(It.Is<LineEntry>(e => e.LocationId == "ST0001")), Times.Exactly(2));
+            _mockLineEntryRepo.Verify(r => r.DeleteByLocationAsync("txn001", "WH001"), Times.Once);
+            _mockUoW.Verify(u => u.SaveChangesAsync(), Times.Once);
+        }
     }
 }

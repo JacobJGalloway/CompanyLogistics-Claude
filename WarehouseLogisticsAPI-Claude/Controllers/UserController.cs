@@ -14,11 +14,13 @@ namespace WarehouseLogistics_Claude.Controllers
     {
         private readonly IUserManagementService _userManagementService = userManagementService;
 
+        /// <summary>Returns all Auth0 users with their assigned roles and location metadata.</summary>
         [HttpGet]
         [Authorize(Policy = "ManageUsers")]
         public async Task<ActionResult<IEnumerable<AppUser>>> GetAllAsync()
             => Ok(await _userManagementService.GetAllUsersAsync());
 
+        /// <summary>Creates a new username/password user in Auth0 and assigns a role.</summary>
         [HttpPost]
         [Authorize(Policy = "ManageUsers")]
         public async Task<IActionResult> CreateAsync([FromBody] CreateUserRequest request)
@@ -34,6 +36,7 @@ namespace WarehouseLogistics_Claude.Controllers
             }
         }
 
+        /// <summary>Blocks a user in Auth0 (soft deactivation; does not delete the account).</summary>
         [HttpPatch("{userId}/deactivate")]
         [Authorize(Policy = "ManageUsers")]
         public async Task<IActionResult> DeactivateAsync(string userId)

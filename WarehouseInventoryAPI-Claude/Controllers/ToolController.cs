@@ -12,6 +12,7 @@ namespace WarehouseInventory_Claude.Controllers
     {
         private readonly IToolService _toolService = toolService;
 
+        /// <summary>Returns all tool inventory items.</summary>
         [HttpGet]
         [Authorize(Policy = "ReadInventory")]
         public async Task<ActionResult<IEnumerable<Tool>>> GetAll()
@@ -19,6 +20,7 @@ namespace WarehouseInventory_Claude.Controllers
             return Ok(await _toolService.GetAllAsync());
         }
 
+        /// <summary>Returns tool items at the given location.</summary>
         [HttpGet("location/{locationId}")]
         [Authorize(Policy = "ReadInventory")]
         public async Task<ActionResult<List<Tool>>> GetByLocationAsync(string locationId)
@@ -26,6 +28,7 @@ namespace WarehouseInventory_Claude.Controllers
             return Ok(await _toolService.GetByLocationAsync(locationId));
         }
 
+        /// <summary>Returns tool items filtered by location and SKU.</summary>
         [HttpGet("filter")]
         [Authorize(Policy = "ReadInventory")]
         public async Task<ActionResult<List<Tool>>> GetByLocationAndSKU([FromQuery] string locationId, [FromQuery] string skuId)
@@ -33,6 +36,7 @@ namespace WarehouseInventory_Claude.Controllers
             return Ok(await _toolService.GetByLocationAndSKUAsync(locationId, skuId));
         }
 
+        /// <summary>Returns tool items matching the given SKU.</summary>
         [HttpGet("{skuId}")]
         [Authorize(Policy = "ReadInventory")]
         public async Task<ActionResult<List<Tool>>> GetBySKUId(string skuId)
@@ -42,6 +46,7 @@ namespace WarehouseInventory_Claude.Controllers
             return Ok(items);
         }
 
+        /// <summary>Stages a new tool item for the current warehouse.</summary>
         [HttpPost]
         public async Task<ActionResult<Tool>> Create(Tool item)
         {
@@ -49,6 +54,7 @@ namespace WarehouseInventory_Claude.Controllers
             return CreatedAtAction(nameof(Create), new { id = created.PartitionKey }, created);
         }
 
+        /// <summary>Replaces all fields on tool items matching the given SKU.</summary>
         [HttpPut("{skuId}")]
         public async Task<IActionResult> UpdateBySKUId(string skuId, Tool item)
         {
@@ -57,6 +63,7 @@ namespace WarehouseInventory_Claude.Controllers
             return NoContent();
         }
 
+        /// <summary>Partially updates the Projected flag or UnloadedDate on a tool item.</summary>
         [HttpPatch("item/{partitionKey}")]
         public async Task<IActionResult> Patch(string partitionKey, [FromBody] InventoryPatchRequest request)
         {
@@ -64,6 +71,7 @@ namespace WarehouseInventory_Claude.Controllers
             return NoContent();
         }
 
+        /// <summary>Deletes a specific tool item by partition key.</summary>
         [HttpDelete("item/{partitionKey}")]
         public async Task<IActionResult> DeleteByPartitionKey(string partitionKey)
         {

@@ -4,31 +4,34 @@ using WarehouseInventory_Claude.Models;
 
 namespace WarehouseInventory_Claude.Data.Repositories
 {
-    public class PPERepository(InventoryContext context) : IPPERepository
+    public class PPERepository(InventoryContext writeContext, InventoryReadContext readContext) : IPPERepository
     {
-        private readonly InventoryContext _context = context;
-
         public async Task<IEnumerable<PPE>> GetAllAsync()
         {
-            return await _context.PPE.ToListAsync();
+            return await readContext.PPE.AsNoTracking().ToListAsync();
         }
 
         public async Task<List<PPE>> GetBySKUIdAsync(string skuId)
         {
-            return await _context.GetPPEBySKUIdsync(skuId);
+            return await readContext.PPE
+                .Where(p => p.SKUMarker == skuId)
+                .AsNoTracking()
+                .ToListAsync();
         }
 
         public async Task<List<PPE>> GetByLocationAsync(string locationId)
         {
-            return await _context.PPE
+            return await readContext.PPE
                 .Where(p => p.LocationId == locationId)
+                .AsNoTracking()
                 .ToListAsync();
         }
 
         public async Task<List<PPE>> GetByLocationAndSKUAsync(string locationId, string skuId)
         {
-            return await _context.PPE
+            return await readContext.PPE
                 .Where(p => p.LocationId == locationId && p.SKUMarker == skuId)
+                .AsNoTracking()
                 .ToListAsync();
         }
 
@@ -37,16 +40,18 @@ namespace WarehouseInventory_Claude.Data.Repositories
             var warehouseId = Environment.GetEnvironmentVariable("LOCATION_ID") ?? string.Empty;
             item.LocationId = warehouseId;
             item.PartitionKey = $"{warehouseId}-{item.SKUMarker}-{Guid.NewGuid():N}";
-            _context.PPE.Add(item);
+            writeContext.PPE.Add(item);
             return item;
         }
 
         public async Task UpdateBySKUIdAsync(string skuId, PPE item)
         {
-            var existingItems = await GetBySKUIdAsync(skuId);
+            var existingItems = await writeContext.PPE
+                .Where(p => p.SKUMarker == skuId)
+                .ToListAsync();
             if (existingItems.Count == 0) return;
 
-            var target = existingItems.FirstOrDefault(c => c.PartitionKey == item.PartitionKey)
+            var target = existingItems.FirstOrDefault(p => p.PartitionKey == item.PartitionKey)
                          ?? existingItems[0];
 
             target.RowKey = item.RowKey;
@@ -56,7 +61,7 @@ namespace WarehouseInventory_Claude.Data.Repositories
 
         public async Task PatchAsync(string partitionKey, bool? projected, DateTime? unloadedDate)
         {
-            var target = await _context.PPE.FindAsync(partitionKey);
+            var target = await writeContext.PPE.FindAsync(partitionKey);
             if (target is null) return;
 
             if (projected.HasValue) target.Projected = projected.Value;
@@ -65,17 +70,19 @@ namespace WarehouseInventory_Claude.Data.Repositories
 
         public async Task<bool> DeleteBySKUIdAsync(string skuId)
         {
-            List<PPE> items = await _context.PPE.Where(p => p.SKUMarker == skuId).ToListAsync();
+            var items = await writeContext.PPE
+                .Where(p => p.SKUMarker == skuId)
+                .ToListAsync();
             if (items.Count == 0) return false;
-            _context.PPE.RemoveRange(items);
+            writeContext.PPE.RemoveRange(items);
             return true;
         }
+
         public async Task<bool> DeleteByPartitionKeyAsync(string partitionKey)
         {
-            var target = await _context.PPE.FindAsync(partitionKey);
+            var target = await writeContext.PPE.FindAsync(partitionKey);
             if (target is null) return false;
-
-            _context.PPE.Remove(target);
+            writeContext.PPE.Remove(target);
             return true;
         }
     }

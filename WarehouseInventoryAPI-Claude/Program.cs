@@ -1,7 +1,11 @@
+using System.Threading.Channels;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 using WarehouseInventory_Claude.Data;
 using WarehouseInventory_Claude.Data.Interfaces;
+using WarehouseInventory_Claude.Data.Sync;
+using WarehouseInventory_Claude.Models;
 using WarehouseInventory_Claude.Services;
 using WarehouseInventory_Claude.Services.Interfaces;
 
@@ -32,24 +36,47 @@ builder.Services.AddAuthorization(options =>
 });
 
 var dbPath = Path.Combine(builder.Environment.ContentRootPath, "..", "Sqlite 3 Implementation", "WarehouseData.db3");
-builder.Services.AddDbContext<InventoryContext>(options => options.UseSqlite($"Data Source={dbPath}"));
+var readDbPath = Path.Combine(builder.Environment.ContentRootPath, "..", "Sqlite 3 Implementation", "WarehouseRead.db3");
+
+var syncChannel = Channel.CreateUnbounded<SyncJob>();
+builder.Services.AddSingleton(syncChannel.Writer);
+builder.Services.AddSingleton(syncChannel.Reader);
+
+builder.Services.AddSingleton<InventorySyncInterceptor>();
+builder.Services.AddDbContext<InventoryContext>((sp, options) =>
+{
+    options.UseSqlite($"Data Source={dbPath}");
+    options.AddInterceptors(sp.GetRequiredService<InventorySyncInterceptor>());
+});
+builder.Services.AddDbContext<InventoryReadContext>(options => options.UseSqlite($"Data Source={readDbPath}"));
+
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IClothingService, ClothingService>();
 builder.Services.AddScoped<IPPEService, PPEService>();
 builder.Services.AddScoped<IToolService, ToolService>();
+builder.Services.AddHostedService<InventorySyncWorker>();
 builder.Services.AddControllers();
+builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    scope.ServiceProvider.GetRequiredService<InventoryContext>().Database.EnsureCreated();
+    var writeCtx = scope.ServiceProvider.GetRequiredService<InventoryContext>();
+    var readCtx = scope.ServiceProvider.GetRequiredService<InventoryReadContext>();
+    writeCtx.Database.EnsureCreated();
+    readCtx.Database.EnsureCreated();
 }
+
+// Enqueue an initial full sync so the read DB is populated on startup
+syncChannel.Writer.TryWrite(new SyncJob(new HashSet<Type> { typeof(Clothing), typeof(PPE), typeof(Tool) }));
 
 app.UseRouting();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapOpenApi();
+app.MapScalarApiReference();
 
 app.Run();

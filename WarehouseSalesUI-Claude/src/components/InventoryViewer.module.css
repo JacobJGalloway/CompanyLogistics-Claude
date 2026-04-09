@@ -1,0 +1,78 @@
+.wrapper {
+  margin-top: 1.5rem;
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.error {
+  color: var(--danger, red);
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-top: 1.5rem;
+  border-bottom: 2px solid var(--table-border);
+}
+
+.tab {
+  padding: 0.4rem 1.1rem;
+  cursor: pointer;
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  color: var(--text-h);
+  font-size: 0.95rem;
+  position: relative;
+  bottom: -2px;
+
+  &:hover:not(.tabActive) {
+    background: var(--surface);
+  }
+}
+
+.tabActive {
+  background: var(--surface);
+  border-color: var(--table-border);
+  border-bottom-color: var(--surface);
+  font-weight: 600;
+}
+
+.tabCount {
+  margin-left: 0.35rem;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+/* Table — base styles come from shared */
+.table {
+  composes: table from '../styles/base.module.css';
+}
+
+.th {
+  composes: th from '../styles/base.module.css';
+}
+
+.td {
+  composes: td from '../styles/base.module.css';
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.pageInfo {
+  font-size: 0.9rem;
+  color: var(--text-h);
+}
