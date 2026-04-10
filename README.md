@@ -11,7 +11,7 @@ A simplified retail logistics system demonstrating warehouse-to-store inventory 
 | `WarehouseSalesUI-Claude` | React/TypeScript client UI | 5173 |
 
 **Shared database:** `Sqlite 3 Implementation/WarehouseData.db3`
-**Read replica:** `Sqlite 3 Implementation/WarehouseRead.db3` (auto-created on startup if not already persised)
+**Read replica:** `Sqlite 3 Implementation/WarehouseRead.db3` (auto-created on startup if not already persisted)
 
 ## Running the System
 
@@ -34,9 +34,9 @@ dotnet test
 ## Architecture
 
 ### CQRS Read Replica
-Both APIs maintain a read replica (`WarehouseRead{WarehouseInventory/WarehouseLogistics}.db3`) synced asynchronously after every write:
+Both APIs maintain a read replica (`WarehouseInventoryRead.db3` / `WarehouseLogisticsRead.db3`) synced asynchronously after every write:
 - Write operations target `WarehouseData.db3`
-- Read operations target appropriate `WarehouseRead.db3` (all `AsNoTracking`)
+- Read operations target the API's own `WarehouseRead.db3` (all `AsNoTracking`)
 - `SaveChangesInterceptor` → `Channel<SyncJob>` → `BackgroundService` (full table resync per changed entity type)
 - `GET /api/Audit` on each API reports write vs read row counts with an `InSync` flag
 
@@ -121,3 +121,4 @@ Both APIs use Auth0 JWT bearer authentication. Permissions are claim-based:
 - [ ] Extract User Management to a dedicated identity service when the data layer splits
 - [ ] Sales UI for system-registered non-employee users (no assigned location, no role) — separate main menu surfacing inventory by type, plus a checkout workflow that reduces inventory quantities via line entries on a customer-facing BOL variant
 - [ ] Scalar branding — company logo and name above the API title; currently blocked by Scalar's limited logo support in the .NET package
+- [ ] Extract `Data/` folders into a dedicated class library project — starting with domain models to prevent hidden complexity under the data layer
