@@ -23,6 +23,9 @@ type HOSLimit struct {
 	ShortHaulRadiusMiles          *int      `json:"short_haul_radius_miles,omitempty"`
 	AdverseWeatherExtensionHours  *float64  `json:"adverse_weather_extension_hours,omitempty"`
 	BreakRequiredAfterHours       float64   `json:"break_required_after_hours"`
+	// CycleLabel is "60/7" or "70/8". States that permit both have one row per cycle.
+	// The HOS service selects the row matching the driver's assigned operating cycle.
+	CycleLabel                    string    `json:"cycle_label"`
 	EffectiveFrom                 time.Time `json:"effective_from"`
 	Notes                         *string   `json:"notes,omitempty"`
 }

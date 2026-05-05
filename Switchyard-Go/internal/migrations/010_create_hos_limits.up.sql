@@ -11,8 +11,10 @@ CREATE TABLE hos_limit (
     short_haul_radius_miles         INTEGER,           -- exemption radius in air miles (null = no exemption)
     adverse_weather_extension_hours NUMERIC,           -- additional driving hours permitted in adverse weather
     break_required_after_hours      NUMERIC NOT NULL DEFAULT 8, -- 30-min break trigger threshold
+    -- '60/7' or '70/8' — states that allow both cycles have one row per cycle
+    cycle_label                     TEXT    NOT NULL,
     effective_from                  DATE    NOT NULL,
     notes                           TEXT
 );
 
-CREATE UNIQUE INDEX hos_limit_state_effective ON hos_limit (state_code, effective_from);
+CREATE UNIQUE INDEX hos_limit_state_cycle_effective ON hos_limit (state_code, cycle_label, effective_from);
