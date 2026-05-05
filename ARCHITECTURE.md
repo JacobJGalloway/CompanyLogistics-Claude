@@ -840,6 +840,21 @@ Depends on operating cost tracking being in place first.
   only addition required
 - Scoped out of 1.1 to keep sprint velocity focused on core dispatch workflow
 
+### Mid-BOL Transfer Stops
+Deliberate driver and/or equipment handoff at a defined point in an active BOL run.
+
+- **Problem:** Without a formal transfer stop, mid-route handoffs make `TruckInventorySnapshot`
+  state non-deterministic — the planner cannot verify what was on the truck when custody changed.
+- **Proposed shape:** a new `stop_type: transfer` on `PlanBOLStop` that records the outgoing
+  driver/equipment and the incoming driver/equipment at a specific location. The constraint solver
+  treats the transfer stop as a verified custody checkpoint before continuing inventory validation
+  for the remaining stops.
+- **Blocked on:** `DriverBOLAssignment` currently assumes one driver + one equipment for the full
+  run. A transfer stop requires either a second assignment record or a transfer sub-record linked
+  to the stop.
+- **Route planner constraint:** the 1.1 route planner explicitly assumes a single driver and
+  equipment set for the full run. Mid-BOL handoffs are rejected until this feature is implemented.
+
 ### README Refresh
 - Rewrite the main `README.md` to reflect Switchyard naming and current 1.1 scope
 - Add a `Future Features` section aligned to this document's v1.2 candidate list
