@@ -43,6 +43,7 @@ type HOSWindow struct {
 	WindowStart     time.Time  `json:"window_start"`
 	DailyHoursUsed  float64    `json:"daily_hours_used"`
 	WeeklyHoursUsed float64    `json:"weekly_hours_used"`
+	LastActivityAt  *time.Time `json:"last_activity_at,omitempty"`
 	Break30Taken    bool       `json:"break_30_taken"`
 	Break30At       *time.Time `json:"break_30_at,omitempty"`
 	MandatedStopAt  *time.Time `json:"mandated_stop_at,omitempty"`
