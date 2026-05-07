@@ -97,7 +97,7 @@ func (h *DeadheadHandler) Pair(w http.ResponseWriter, r *http.Request) {
 	// the active BOL is projected to be fulfilled (ARCHITECTURE.md §4.2).
 	window := time.Duration(h.deadheadWindowHours * float64(time.Hour))
 	earliestValidAt := req.EstimatedFulfillmentAt.Add(-window)
-	if time.Now().After(earliestValidAt) {
+	if !time.Now().Before(earliestValidAt) {
 		writeError(w, http.StatusConflict,
 			"dead-head pairing window has closed — must be arranged at least "+
 				fmt.Sprintf("%.0f hours", h.deadheadWindowHours)+

@@ -1,0 +1,222 @@
+package handlers
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/JacobJGalloway/switchyard-go/internal/events"
+	"github.com/JacobJGalloway/switchyard-go/internal/models"
+)
+
+// --- minimal stubs ---
+
+type stubEquipRepo struct {
+	equipment   *models.Equipment
+	maintenance *models.MaintenanceRecord
+	breakdown   *models.BreakdownRecord
+	createErr   error
+	statusErr   error
+	maintErr    error
+	breakErr    error
+}
+
+func (r *stubEquipRepo) GetAll(_ context.Context) ([]*models.Equipment, error) { return nil, nil }
+func (r *stubEquipRepo) GetByID(_ context.Context, _ uuid.UUID) (*models.Equipment, error) {
+	if r.equipment == nil {
+		return nil, errNotFound
+	}
+	return r.equipment, nil
+}
+func (r *stubEquipRepo) Create(_ context.Context, _ *models.Equipment) error  { return r.createErr }
+func (r *stubEquipRepo) UpdateStatus(_ context.Context, _ uuid.UUID, _ models.EquipmentStatus) error {
+	return r.statusErr
+}
+func (r *stubEquipRepo) CreateMaintenanceRecord(_ context.Context, _ *models.MaintenanceRecord) error {
+	return r.maintErr
+}
+func (r *stubEquipRepo) ResolveMaintenanceRecord(_ context.Context, _ uuid.UUID, _ time.Time) error {
+	return nil
+}
+func (r *stubEquipRepo) GetActiveMaintenanceByEquipment(_ context.Context, _ uuid.UUID) (*models.MaintenanceRecord, error) {
+	return r.maintenance, nil
+}
+func (r *stubEquipRepo) CreateBreakdownRecord(_ context.Context, _ *models.BreakdownRecord) error {
+	return r.breakErr
+}
+func (r *stubEquipRepo) ResolveBreakdownRecord(_ context.Context, _ uuid.UUID, _ time.Time) error {
+	return nil
+}
+func (r *stubEquipRepo) GetActiveBreakdownByEquipment(_ context.Context, _ uuid.UUID) (*models.BreakdownRecord, error) {
+	return r.breakdown, nil
+}
+
+type stubEquipNotifier struct{ called bool }
+
+func (n *stubEquipNotifier) OnRoadsideBreakdownWithLoad(_ context.Context, _ events.EquipmentBreakdownPayload) error {
+	n.called = true
+	return nil
+}
+
+// errNotFound is a sentinel used when stubs have no data.
+var errNotFound = errNotFoundSentinel{}
+
+type errNotFoundSentinel struct{}
+
+func (e errNotFoundSentinel) Error() string { return "not found" }
+
+// withIDParam injects a chi URL param into the request context.
+func withIDParam(r *http.Request, id string) *http.Request {
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id)
+	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+}
+
+func postBody(t testing.TB, body any) *bytes.Reader {
+	t.Helper()
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+	return bytes.NewReader(raw)
+}
+
+// --- Create ---
+
+func TestEquipmentCreate_Success(t *testing.T) {
+	h := NewEquipmentHandler(&stubEquipRepo{}, &stubEquipNotifier{})
+	body := map[string]any{
+		"unit_id":          "TRUCK-01",
+		"equipment_type":   "truck",
+		"home_warehouse_id": "wh-1",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/equipment", postBody(t, body))
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+}
+
+func TestEquipmentCreate_MissingUnitID_Returns400(t *testing.T) {
+	h := NewEquipmentHandler(&stubEquipRepo{}, &stubEquipNotifier{})
+	body := map[string]any{"equipment_type": "truck", "home_warehouse_id": "wh-1"}
+	req := httptest.NewRequest(http.MethodPost, "/api/equipment", postBody(t, body))
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestEquipmentCreate_InvalidType_Returns400(t *testing.T) {
+	h := NewEquipmentHandler(&stubEquipRepo{}, &stubEquipNotifier{})
+	body := map[string]any{"unit_id": "TRUCK-99", "equipment_type": "bicycle", "home_warehouse_id": "wh-1"}
+	req := httptest.NewRequest(http.MethodPost, "/api/equipment", postBody(t, body))
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// --- ReportMaintenance ---
+
+func TestEquipmentMaintenance_AlreadyInMaintenance_Returns409(t *testing.T) {
+	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusMaintenance}
+	h := NewEquipmentHandler(&stubEquipRepo{equipment: equip}, &stubEquipNotifier{})
+	body := map[string]any{"description": "oil change", "scheduled_at": time.Now()}
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", postBody(t, body)), equip.ID.String())
+	rec := httptest.NewRecorder()
+	h.ReportMaintenance(rec, req)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+}
+
+func TestEquipmentMaintenance_AlreadyInBreakdown_Returns409(t *testing.T) {
+	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusBreakdown}
+	h := NewEquipmentHandler(&stubEquipRepo{equipment: equip}, &stubEquipNotifier{})
+	body := map[string]any{"description": "flat tire", "scheduled_at": time.Now()}
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", postBody(t, body)), equip.ID.String())
+	rec := httptest.NewRecorder()
+	h.ReportMaintenance(rec, req)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+}
+
+func TestEquipmentMaintenance_MissingDescription_Returns400(t *testing.T) {
+	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusAvailable}
+	h := NewEquipmentHandler(&stubEquipRepo{equipment: equip}, &stubEquipNotifier{})
+	body := map[string]any{"scheduled_at": time.Now()}
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", postBody(t, body)), equip.ID.String())
+	rec := httptest.NewRecorder()
+	h.ReportMaintenance(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// --- ReportBreakdown ---
+
+func TestEquipmentBreakdown_RoadsideMissingLocationDesc_Returns400(t *testing.T) {
+	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusAvailable}
+	h := NewEquipmentHandler(&stubEquipRepo{equipment: equip}, &stubEquipNotifier{})
+	body := map[string]any{"breakdown_type": "roadside", "load_attached": false}
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", postBody(t, body)), equip.ID.String())
+	rec := httptest.NewRecorder()
+	h.ReportBreakdown(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestEquipmentBreakdown_InvalidType_Returns400(t *testing.T) {
+	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusAvailable}
+	h := NewEquipmentHandler(&stubEquipRepo{equipment: equip}, &stubEquipNotifier{})
+	body := map[string]any{"breakdown_type": "alien_abduction"}
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", postBody(t, body)), equip.ID.String())
+	rec := httptest.NewRecorder()
+	h.ReportBreakdown(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestEquipmentBreakdown_RoadsideWithLoad_NotifiesDispatcher(t *testing.T) {
+	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusAvailable}
+	notifier := &stubEquipNotifier{}
+	loc := "I-90 mm 42"
+	h := NewEquipmentHandler(&stubEquipRepo{equipment: equip}, notifier)
+	body := map[string]any{"breakdown_type": "roadside", "load_attached": true, "location_desc": loc}
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", postBody(t, body)), equip.ID.String())
+	rec := httptest.NewRecorder()
+	h.ReportBreakdown(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, notifier.called, "roadside+load breakdown must alert dispatcher")
+}
+
+func TestEquipmentBreakdown_DepotNoLoad_NoNotification(t *testing.T) {
+	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusAvailable}
+	notifier := &stubEquipNotifier{}
+	h := NewEquipmentHandler(&stubEquipRepo{equipment: equip}, notifier)
+	body := map[string]any{"breakdown_type": "depot", "load_attached": false}
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", postBody(t, body)), equip.ID.String())
+	rec := httptest.NewRecorder()
+	h.ReportBreakdown(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.False(t, notifier.called, "depot breakdown must not trigger immediate alert")
+}
+
+// --- Resolve ---
+
+func TestEquipmentResolve_NotInMaintenanceOrBreakdown_Returns409(t *testing.T) {
+	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusAvailable}
+	h := NewEquipmentHandler(&stubEquipRepo{equipment: equip}, &stubEquipNotifier{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), equip.ID.String())
+	rec := httptest.NewRecorder()
+	h.Resolve(rec, req)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+}
+
+func TestEquipmentResolve_MaintenanceRecord_Returns204(t *testing.T) {
+	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusMaintenance}
+	maint := &models.MaintenanceRecord{ID: uuid.New(), EquipmentID: equip.ID}
+	h := NewEquipmentHandler(&stubEquipRepo{equipment: equip, maintenance: maint}, &stubEquipNotifier{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), equip.ID.String())
+	rec := httptest.NewRecorder()
+	h.Resolve(rec, req)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+}
