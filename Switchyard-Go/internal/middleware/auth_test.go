@@ -79,3 +79,8 @@ func TestRequirePermission_ExactMatchOnly(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 }
+
+func TestCustomClaims_Validate_ReturnsNil(t *testing.T) {
+	c := &CustomClaims{Permissions: []string{"read:bol"}}
+	assert.NoError(t, c.Validate(nil))
+}

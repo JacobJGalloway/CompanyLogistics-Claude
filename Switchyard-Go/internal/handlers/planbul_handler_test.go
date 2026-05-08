@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/JacobJGalloway/switchyard-go/internal/integrations"
 	"github.com/JacobJGalloway/switchyard-go/internal/models"
@@ -123,6 +124,14 @@ func TestPlanBOL_Create_Success_Returns201(t *testing.T) {
 
 // --- Get ---
 
+func TestPlanBOL_Get_BadUUID_Returns400(t *testing.T) {
+	h := newPlanBOLHandler(&stubPlanBOLSvc{}, &stubBOLRepo{}, &stubLogisticsClient{})
+	req := withIDParam(httptest.NewRequest(http.MethodGet, "/", nil), "not-a-uuid")
+	rec := httptest.NewRecorder()
+	h.Get(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 func TestPlanBOL_Get_NotFound_Returns404(t *testing.T) {
 	h := newPlanBOLHandler(&stubPlanBOLSvc{}, &stubBOLRepo{}, &stubLogisticsClient{})
 	req := httptest.NewRequest(http.MethodGet, "/api/plan-bol/"+uuid.New().String(), nil)
@@ -142,6 +151,14 @@ func TestPlanBOL_Get_Success_Returns200(t *testing.T) {
 }
 
 // --- BeginPlanning ---
+
+func TestPlanBOL_BeginPlanning_BadUUID_Returns400(t *testing.T) {
+	h := newPlanBOLHandler(&stubPlanBOLSvc{}, &stubBOLRepo{}, &stubLogisticsClient{})
+	req := withIDParam(httptest.NewRequest(http.MethodPost, "/", nil), "not-a-uuid")
+	rec := httptest.NewRecorder()
+	h.BeginPlanning(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
 
 func TestPlanBOL_BeginPlanning_NotFound_Returns404(t *testing.T) {
 	h := newPlanBOLHandler(&stubPlanBOLSvc{}, &stubBOLRepo{}, &stubLogisticsClient{})
@@ -171,6 +188,22 @@ func TestPlanBOL_BeginPlanning_Success_Returns204(t *testing.T) {
 
 // --- MarkLoaded ---
 
+func TestPlanBOL_MarkLoaded_BadUUID_Returns400(t *testing.T) {
+	h := newPlanBOLHandler(&stubPlanBOLSvc{}, &stubBOLRepo{}, &stubLogisticsClient{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), "not-a-uuid")
+	rec := httptest.NewRecorder()
+	h.MarkLoaded(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestPlanBOL_MarkLoaded_NotFound_Returns404(t *testing.T) {
+	h := newPlanBOLHandler(&stubPlanBOLSvc{}, &stubBOLRepo{}, &stubLogisticsClient{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), uuid.New().String())
+	rec := httptest.NewRecorder()
+	h.MarkLoaded(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
 func TestPlanBOL_MarkLoaded_WrongStatus_Returns409(t *testing.T) {
 	plan := bolWithStatus(models.PlanBOLStatusDraft)
 	h := newPlanBOLHandler(&stubPlanBOLSvc{}, &stubBOLRepo{bol: plan}, &stubLogisticsClient{})
@@ -190,6 +223,23 @@ func TestPlanBOL_MarkLoaded_Success_Returns204(t *testing.T) {
 }
 
 // --- Commit ---
+
+func TestPlanBOL_Commit_BadUUID_Returns400(t *testing.T) {
+	h := newPlanBOLHandler(&stubPlanBOLSvc{}, &stubBOLRepo{}, &stubLogisticsClient{})
+	req := withIDParam(httptest.NewRequest(http.MethodPost, "/", nil), "not-a-uuid")
+	rec := httptest.NewRecorder()
+	h.Commit(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestPlanBOL_Commit_NotFound_Returns404(t *testing.T) {
+	h := newPlanBOLHandler(&stubPlanBOLSvc{}, &stubBOLRepo{}, &stubLogisticsClient{})
+	body := map[string]any{"customer_first_name": "Jane", "customer_last_name": "Doe", "city": "Chicago", "state": "IL"}
+	req := withIDParam(httptest.NewRequest(http.MethodPost, "/", postBody(t, body)), uuid.New().String())
+	rec := httptest.NewRecorder()
+	h.Commit(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
 
 func TestPlanBOL_Commit_MissingFields_Returns400(t *testing.T) {
 	plan := bolWithStatus(models.PlanBOLStatusPlanProgress)
@@ -235,6 +285,38 @@ func TestPlanBOL_Commit_Success_Returns200(t *testing.T) {
 
 // --- Validate, GetStatusHistory, GetTruckState ---
 
+func TestPlanBOL_GetStatusHistory_BadUUID_Returns400(t *testing.T) {
+	h := newPlanBOLHandler(&stubPlanBOLSvc{}, &stubBOLRepo{}, &stubLogisticsClient{})
+	req := withIDParam(httptest.NewRequest(http.MethodGet, "/", nil), "not-a-uuid")
+	rec := httptest.NewRecorder()
+	h.GetStatusHistory(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestPlanBOL_GetTruckState_BadUUID_Returns400(t *testing.T) {
+	h := newPlanBOLHandler(&stubPlanBOLSvc{}, &stubBOLRepo{}, &stubLogisticsClient{})
+	req := withIDParam(httptest.NewRequest(http.MethodGet, "/", nil), "not-a-uuid")
+	rec := httptest.NewRecorder()
+	h.GetTruckState(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestPlanBOL_Validate_BadUUID_Returns400(t *testing.T) {
+	h := newPlanBOLHandler(&stubPlanBOLSvc{}, &stubBOLRepo{}, &stubLogisticsClient{})
+	req := withIDParam(httptest.NewRequest(http.MethodPost, "/", nil), "not-a-uuid")
+	rec := httptest.NewRecorder()
+	h.Validate(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestPlanBOL_Validate_ServiceError_Returns500(t *testing.T) {
+	h := newPlanBOLHandler(&stubPlanBOLSvc{err: errors.New("db error")}, &stubBOLRepo{}, &stubLogisticsClient{})
+	req := withIDParam(httptest.NewRequest(http.MethodPost, "/", nil), uuid.New().String())
+	rec := httptest.NewRecorder()
+	h.Validate(rec, req)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
 func TestPlanBOL_Validate_Success_Returns200(t *testing.T) {
 	plan := bolWithStatus(models.PlanBOLStatusPlanProgress)
 	h := newPlanBOLHandler(&stubPlanBOLSvc{violations: []string{}}, &stubBOLRepo{bol: plan}, &stubLogisticsClient{})
@@ -251,6 +333,45 @@ func TestPlanBOL_GetStatusHistory_Returns200(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.GetStatusHistory(rec, req)
 	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// --- buildLineEntries ---
+
+func TestBuildLineEntries_MixedStops(t *testing.T) {
+	stops := []*models.PlanBOLStop{
+		{
+			LocationID:    "WH001",
+			StopType:      models.StopTypeWarehouse,
+			DeliveryItems: map[string]int{"SKU-A": 10, "SKU-B": 5},
+		},
+		{
+			LocationID:    "ST0001",
+			StopType:      models.StopTypeStore,
+			DeliveryItems: map[string]int{"SKU-A": 3},
+		},
+	}
+	entries := buildLineEntries(stops)
+	// Warehouse items → positive qty; store items → negative qty.
+	require.Len(t, entries, 3)
+	skuAWarehouse, skuBWarehouse, skuAStore := 0, 0, 0
+	for _, e := range entries {
+		switch {
+		case e.LocationID == "WH001" && e.SKUMarker == "SKU-A":
+			skuAWarehouse = e.Quantity
+		case e.LocationID == "WH001" && e.SKUMarker == "SKU-B":
+			skuBWarehouse = e.Quantity
+		case e.LocationID == "ST0001" && e.SKUMarker == "SKU-A":
+			skuAStore = e.Quantity
+		}
+	}
+	assert.Equal(t, 10, skuAWarehouse)
+	assert.Equal(t, 5, skuBWarehouse)
+	assert.Equal(t, -3, skuAStore)
+}
+
+func TestBuildLineEntries_EmptyStops(t *testing.T) {
+	assert.Empty(t, buildLineEntries(nil))
+	assert.Empty(t, buildLineEntries([]*models.PlanBOLStop{}))
 }
 
 func TestPlanBOL_GetTruckState_Returns200(t *testing.T) {

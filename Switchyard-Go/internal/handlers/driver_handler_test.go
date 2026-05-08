@@ -68,8 +68,28 @@ func newDriverHandler(
 
 // --- GetAll ---
 
+func TestDriver_GetAll_RepoError_Returns500(t *testing.T) {
+	h := newDriverHandler(&stubDriverRepo{getAllErr: errNotFound}, &stubBOLRepo{}, &stubHOSRepo{}, &stubAssignRepo{}, &stubDriverHOSSvc{})
+	req := httptest.NewRequest(http.MethodGet, "/api/driver", nil)
+	rec := httptest.NewRecorder()
+	h.GetAll(rec, req)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
 func TestDriver_GetAll_Returns200(t *testing.T) {
 	h := newDriverHandler(&stubDriverRepo{}, &stubBOLRepo{}, &stubHOSRepo{}, &stubAssignRepo{}, &stubDriverHOSSvc{})
+	req := httptest.NewRequest(http.MethodGet, "/api/driver", nil)
+	rec := httptest.NewRecorder()
+	h.GetAll(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestDriver_GetAll_WithDrivers_Returns200(t *testing.T) {
+	drivers := []*models.Driver{
+		{ID: uuid.New(), Name: "Alice", LicenseState: "IL", IsActive: true},
+		{ID: uuid.New(), Name: "Bob", LicenseState: "WI", IsActive: true},
+	}
+	h := newDriverHandler(&stubDriverRepo{all: drivers}, &stubBOLRepo{}, &stubHOSRepo{}, &stubAssignRepo{}, &stubDriverHOSSvc{})
 	req := httptest.NewRequest(http.MethodGet, "/api/driver", nil)
 	rec := httptest.NewRecorder()
 	h.GetAll(rec, req)
@@ -89,6 +109,18 @@ func TestDriver_GetRunsheet_NotFound_Returns404(t *testing.T) {
 func TestDriver_GetRunsheet_NoAssignment_Returns200(t *testing.T) {
 	driver := &models.Driver{ID: uuid.New(), Name: "Alice"}
 	h := newDriverHandler(&stubDriverRepo{driver: driver}, &stubBOLRepo{}, &stubHOSRepo{}, &stubAssignRepo{}, &stubDriverHOSSvc{})
+	req := withIDParam(httptest.NewRequest(http.MethodGet, "/", nil), driver.ID.String())
+	rec := httptest.NewRecorder()
+	h.GetRunsheet(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestDriver_GetRunsheet_WithActiveBOL_Returns200(t *testing.T) {
+	driver := &models.Driver{ID: uuid.New(), Name: "Bob"}
+	plan := bolWithStatus(models.PlanBOLStatusSubmitted)
+	assign := &models.DriverBOLAssignment{ID: uuid.New(), PlanBOLID: plan.ID}
+	ar := &activeAssignRepo{active: assign}
+	h := NewDriverHandler(&stubDriverRepo{driver: driver}, &stubBOLRepo{bol: plan}, &stubHOSRepo{}, ar, &stubDriverHOSSvc{}, &stubLogisticsClient{}, nil)
 	req := withIDParam(httptest.NewRequest(http.MethodGet, "/", nil), driver.ID.String())
 	rec := httptest.NewRecorder()
 	h.GetRunsheet(rec, req)

@@ -28,9 +28,12 @@ type stubEquipRepo struct {
 	statusErr   error
 	maintErr    error
 	breakErr    error
+	getAllErr    error
 }
 
-func (r *stubEquipRepo) GetAll(_ context.Context) ([]*models.Equipment, error) { return nil, nil }
+func (r *stubEquipRepo) GetAll(_ context.Context) ([]*models.Equipment, error) {
+	return nil, r.getAllErr
+}
 func (r *stubEquipRepo) GetByID(_ context.Context, _ uuid.UUID) (*models.Equipment, error) {
 	if r.equipment == nil {
 		return nil, errNotFound
@@ -88,6 +91,24 @@ func postBody(t testing.TB, body any) *bytes.Reader {
 	return bytes.NewReader(raw)
 }
 
+// --- GetAll ---
+
+func TestEquipmentGetAll_Returns200(t *testing.T) {
+	h := NewEquipmentHandler(&stubEquipRepo{}, &stubEquipNotifier{})
+	req := httptest.NewRequest(http.MethodGet, "/api/equipment", nil)
+	rec := httptest.NewRecorder()
+	h.GetAll(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestEquipmentGetAll_RepoError_Returns500(t *testing.T) {
+	h := NewEquipmentHandler(&stubEquipRepo{getAllErr: errNotFound}, &stubEquipNotifier{})
+	req := httptest.NewRequest(http.MethodGet, "/api/equipment", nil)
+	rec := httptest.NewRecorder()
+	h.GetAll(rec, req)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
 // --- Create ---
 
 func TestEquipmentCreate_Success(t *testing.T) {
@@ -122,6 +143,34 @@ func TestEquipmentCreate_InvalidType_Returns400(t *testing.T) {
 }
 
 // --- ReportMaintenance ---
+
+func TestEquipmentMaintenance_BadUUID_Returns400(t *testing.T) {
+	h := NewEquipmentHandler(&stubEquipRepo{}, &stubEquipNotifier{})
+	body := map[string]any{"description": "oil change"}
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", postBody(t, body)), "not-a-uuid")
+	rec := httptest.NewRecorder()
+	h.ReportMaintenance(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestEquipmentMaintenance_NotFound_Returns404(t *testing.T) {
+	h := NewEquipmentHandler(&stubEquipRepo{}, &stubEquipNotifier{})
+	body := map[string]any{"description": "oil change"}
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", postBody(t, body)), uuid.New().String())
+	rec := httptest.NewRecorder()
+	h.ReportMaintenance(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestEquipmentMaintenance_Success_Returns200(t *testing.T) {
+	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusAvailable}
+	h := NewEquipmentHandler(&stubEquipRepo{equipment: equip}, &stubEquipNotifier{})
+	body := map[string]any{"description": "oil change", "scheduled_at": time.Now()}
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", postBody(t, body)), equip.ID.String())
+	rec := httptest.NewRecorder()
+	h.ReportMaintenance(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
 
 func TestEquipmentMaintenance_AlreadyInMaintenance_Returns409(t *testing.T) {
 	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusMaintenance}
@@ -201,6 +250,32 @@ func TestEquipmentBreakdown_DepotNoLoad_NoNotification(t *testing.T) {
 }
 
 // --- Resolve ---
+
+func TestEquipmentResolve_BadUUID_Returns400(t *testing.T) {
+	h := NewEquipmentHandler(&stubEquipRepo{}, &stubEquipNotifier{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), "not-a-uuid")
+	rec := httptest.NewRecorder()
+	h.Resolve(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestEquipmentResolve_NotFound_Returns404(t *testing.T) {
+	h := NewEquipmentHandler(&stubEquipRepo{}, &stubEquipNotifier{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), uuid.New().String())
+	rec := httptest.NewRecorder()
+	h.Resolve(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestEquipmentResolve_BreakdownRecord_Returns204(t *testing.T) {
+	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusBreakdown}
+	br := &models.BreakdownRecord{ID: uuid.New(), EquipmentID: equip.ID}
+	h := NewEquipmentHandler(&stubEquipRepo{equipment: equip, breakdown: br}, &stubEquipNotifier{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), equip.ID.String())
+	rec := httptest.NewRecorder()
+	h.Resolve(rec, req)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+}
 
 func TestEquipmentResolve_NotInMaintenanceOrBreakdown_Returns409(t *testing.T) {
 	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusAvailable}

@@ -144,6 +144,20 @@ func TestDeadheadPair_MissingOriginWarehouse_Returns400(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+func TestDeadheadPair_ZeroEstimatedFulfillment_Returns400(t *testing.T) {
+	h := NewDeadheadHandler(&stubPairingRepo{}, 4.0)
+	body := map[string]any{
+		"active_bol_id":   uuid.New().String(),
+		"deadhead_bol_id": uuid.New().String(),
+		"origin_warehouse": "wh-1",
+		// estimated_fulfillment_at intentionally omitted → zero time
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/deadhead/pair", postBody(t, body))
+	rec := httptest.NewRecorder()
+	h.Pair(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 func TestDeadheadPair_InvalidBOLID_Returns400(t *testing.T) {
 	h := NewDeadheadHandler(&stubPairingRepo{}, 4.0)
 	body := map[string]any{

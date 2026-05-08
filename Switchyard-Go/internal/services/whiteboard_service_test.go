@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/JacobJGalloway/switchyard-go/internal/events"
 	"github.com/JacobJGalloway/switchyard-go/internal/models"
 )
 
@@ -599,4 +600,100 @@ func TestGetBoardState_DriverPool(t *testing.T) {
 
 	require.Len(t, board.Available.Resting, 1)
 	assert.Equal(t, restingDriverID, board.Available.Resting[0].Driver.ID)
+}
+
+// =============================================================================
+// GetBoardState — firstUnprocessedStop (sort + loop body)
+// =============================================================================
+
+func TestGetBoardState_InTransit_PicksFirstUnprocessedStop(t *testing.T) {
+	driverID := uuid.New()
+	bolID := uuid.New()
+	equipID := uuid.New()
+	now := time.Now()
+	departed := now.Add(-2 * time.Hour)
+
+	dr, ar, br, er, hr := emptyRepos()
+	driver := &models.Driver{ID: driverID, Name: "River", LicenseState: "IL", IsActive: true}
+	bol := &models.PlanBOLRecord{ID: bolID, Status: models.PlanBOLStatusSubmitted, CreatedAt: now}
+	equip := &models.Equipment{ID: equipID}
+	assign := &models.DriverBOLAssignment{
+		ID: uuid.New(), DriverID: driverID, PlanBOLID: bolID, EquipmentID: equipID,
+		AssignedAt: now.Add(-3 * time.Hour), DepartedAt: &departed,
+	}
+
+	stop1 := &models.PlanBOLStop{ID: uuid.New(), PlanBOLID: bolID, Sequence: 1, IsProcessed: true}
+	stop2 := &models.PlanBOLStop{ID: uuid.New(), PlanBOLID: bolID, Sequence: 2, IsProcessed: false}
+
+	dr.byID[driverID] = driver
+	ar.active = []*models.DriverBOLAssignment{assign}
+	br.byID[bolID] = bol
+	br.stops[bolID] = []*models.PlanBOLStop{stop2, stop1} // out-of-order to exercise sort
+	er.byID[equipID] = equip
+	hr.windows[driverID] = &models.HOSWindow{DriverID: driverID, DailyHoursUsed: 1}
+
+	board, err := newWBService(dr, ar, br, er, hr).GetBoardState(context.Background())
+	require.NoError(t, err)
+	require.Len(t, board.InDelivery.InTransit, 1)
+	require.NotNil(t, board.InDelivery.InTransit[0].CurrentStop)
+	assert.Equal(t, stop2.ID, board.InDelivery.InTransit[0].CurrentStop.ID, "first unprocessed stop should be seq=2")
+}
+
+// =============================================================================
+// GetAlerts — alert generation branches
+// =============================================================================
+
+func TestGetAlerts_EmptyBoard_ReturnsNilError(t *testing.T) {
+	dr, ar, br, er, hr := emptyRepos()
+	svc := newWBService(dr, ar, br, er, hr)
+	alerts, err := svc.GetAlerts(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, alerts)
+}
+
+func TestGetAlerts_HOSWarning_GeneratesAlert(t *testing.T) {
+	driverID := uuid.New()
+	bolID := uuid.New()
+	equipID := uuid.New()
+	now := time.Now()
+	departed := now.Add(-2 * time.Hour)
+
+	dr, ar, br, er, hr := emptyRepos()
+	limit := &models.HOSLimit{DailyDrivingLimitHours: 11, WeeklyLimitHours: 60}
+	hr.limits["IL/60h/7d"] = limit
+
+	driver := &models.Driver{ID: driverID, Name: "Dana", LicenseState: "IL", IsActive: true}
+	bol := &models.PlanBOLRecord{ID: bolID, Status: models.PlanBOLStatusSubmitted, CreatedAt: now}
+	equip := &models.Equipment{ID: equipID}
+	assign := &models.DriverBOLAssignment{
+		ID: uuid.New(), DriverID: driverID, PlanBOLID: bolID, EquipmentID: equipID,
+		AssignedAt: now.Add(-3 * time.Hour), DepartedAt: &departed,
+	}
+
+	// 9.5 hours used → remaining = 1.5, threshold = 2 → HOSStatusYellow
+	dr.byID[driverID] = driver
+	ar.active = []*models.DriverBOLAssignment{assign}
+	br.byID[bolID] = bol
+	er.byID[equipID] = equip
+	hr.windows[driverID] = &models.HOSWindow{DriverID: driverID, DailyHoursUsed: 9.5}
+
+	alerts, err := newWBService(dr, ar, br, er, hr).GetAlerts(context.Background())
+	require.NoError(t, err)
+	require.Len(t, alerts, 1)
+	assert.Equal(t, AlertTypeHOSWarning, alerts[0].AlertType)
+}
+
+// =============================================================================
+// On* callbacks — v1.1 no-ops, all must return nil
+// =============================================================================
+
+func TestWhiteboardService_OnCallbacks_ReturnNil(t *testing.T) {
+	svc := newWBService(&wbDriverRepo{}, &wbAssignRepo{}, &wbBOLRepo{}, &wbEquipRepo{}, &wbHOSRepo{})
+	ctx := context.Background()
+	assert.NoError(t, svc.OnAssignmentDeparted(ctx, events.AssignmentPayload{}))
+	assert.NoError(t, svc.OnAssignmentFulfilled(ctx, events.AssignmentPayload{}))
+	assert.NoError(t, svc.OnDeadheadConfirmed(ctx, events.AssignmentPayload{}))
+	assert.NoError(t, svc.OnMandatedStop(ctx, events.MandatedStopPayload{}))
+	assert.NoError(t, svc.OnEquipmentBreakdown(ctx, events.EquipmentBreakdownPayload{}))
+	assert.NoError(t, svc.OnEquipmentResolved(ctx, events.EquipmentResolvedPayload{}))
 }

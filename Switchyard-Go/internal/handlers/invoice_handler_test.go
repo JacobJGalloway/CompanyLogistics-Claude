@@ -85,6 +85,17 @@ func TestInvoice_GetInvoicesByStore_EmptyList_Returns200(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
+func TestInvoice_GetInvoicesByStore_RepoError_Returns500(t *testing.T) {
+	h := NewInvoiceHandler(&stubInvoiceRepo{err: errNotFound})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("storeId", "ST0001")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rec := httptest.NewRecorder()
+	h.GetInvoicesByStore(rec, req)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
 func TestInvoice_GetInvoicesByStore_WithResults_Returns200(t *testing.T) {
 	invs := []*models.InternalInvoice{{ID: uuid.New(), StoreID: "ST0002"}}
 	h := NewInvoiceHandler(&stubInvoiceRepo{invoices: invs})

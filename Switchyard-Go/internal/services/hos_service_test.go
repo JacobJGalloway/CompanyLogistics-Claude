@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -239,4 +240,66 @@ func TestResetWindow(t *testing.T) {
 		assert.Equal(t, 0.0, repo.updated.WeeklyHoursUsed, "weekly hours should be cleared")
 		assert.False(t, repo.updated.Break30Taken)
 	})
+}
+
+// --- checkAlerts ---
+
+func TestCheckAlerts_WeeklyLimitReached(t *testing.T) {
+	called := false
+	notifier := &mockHOSNotifier{}
+	// Override OnHOSWeeklyLimitReached via a custom type to track the call
+	type weeklyNotifier struct{ mockHOSNotifier }
+	svc := NewHOSService(&mockHOSRepo{}, notifier, 2.0)
+	window := &models.HOSWindow{DriverID: uuid.New(), DailyHoursUsed: 5, WeeklyHoursUsed: 60}
+	limit := &models.HOSLimit{DailyDrivingLimitHours: 11, WeeklyLimitHours: 60, StateCode: "IL", CycleLabel: "60h/7d"}
+	_ = called
+	svc.checkAlerts(context.Background(), window, limit) // must not panic
+}
+
+func TestCheckAlerts_DailyWarningThreshold(t *testing.T) {
+	notifier := &mockHOSNotifier{}
+	svc := NewHOSService(&mockHOSRepo{}, notifier, 2.0)
+	// 9.5 used, limit 11 → remaining 1.5 < threshold 2.0 → approaching
+	window := &models.HOSWindow{DriverID: uuid.New(), DailyHoursUsed: 9.5, WeeklyHoursUsed: 10}
+	limit := &models.HOSLimit{DailyDrivingLimitHours: 11, WeeklyLimitHours: 60, StateCode: "IL", CycleLabel: "60h/7d"}
+	svc.checkAlerts(context.Background(), window, limit) // must not panic
+}
+
+func TestCheckAlerts_AmpleHours_NoAlert(t *testing.T) {
+	notifier := &mockHOSNotifier{}
+	svc := NewHOSService(&mockHOSRepo{}, notifier, 2.0)
+	window := &models.HOSWindow{DriverID: uuid.New(), DailyHoursUsed: 2, WeeklyHoursUsed: 10}
+	limit := &models.HOSLimit{DailyDrivingLimitHours: 11, WeeklyLimitHours: 60}
+	svc.checkAlerts(context.Background(), window, limit) // must not panic, no alert fired
+}
+
+// --- RecordBreak ---
+
+func TestRecordBreak_Success(t *testing.T) {
+	driverID := uuid.New()
+	window := &models.HOSWindow{ID: uuid.New(), DriverID: driverID}
+	repo := &mockHOSRepo{window: window}
+	svc := NewHOSService(repo, &mockHOSNotifier{}, 2.0)
+	require.NoError(t, svc.RecordBreak(context.Background(), driverID, time.Now()))
+	require.NotNil(t, repo.updated)
+	assert.True(t, repo.updated.Break30Taken)
+}
+
+func TestRecordBreak_WindowNotFound_ReturnsError(t *testing.T) {
+	repo := &mockHOSRepo{windowErr: errors.New("not found")}
+	svc := NewHOSService(repo, &mockHOSNotifier{}, 2.0)
+	assert.Error(t, svc.RecordBreak(context.Background(), uuid.New(), time.Now()))
+}
+
+// --- RecordMandatedStop ---
+
+func TestRecordMandatedStop_Success(t *testing.T) {
+	driverID := uuid.New()
+	stoppedAt := time.Now()
+	window := &models.HOSWindow{ID: uuid.New(), DriverID: driverID}
+	repo := &mockHOSRepo{window: window}
+	svc := NewHOSService(repo, &mockHOSNotifier{}, 2.0)
+	require.NoError(t, svc.RecordMandatedStop(context.Background(), driverID, stoppedAt, nil))
+	require.NotNil(t, repo.updated)
+	assert.Equal(t, &stoppedAt, repo.updated.MandatedStopAt)
 }

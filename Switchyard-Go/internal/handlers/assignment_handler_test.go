@@ -47,11 +47,15 @@ func (r *stubAssignRepo) ConfirmDeadhead(_ context.Context, _ uuid.UUID, _ time.
 }
 
 type stubDriverRepo struct {
-	driver *models.Driver
-	err    error
+	driver    *models.Driver
+	all       []*models.Driver
+	err       error
+	getAllErr  error
 }
 
-func (r *stubDriverRepo) GetAll(_ context.Context) ([]*models.Driver, error) { return nil, nil }
+func (r *stubDriverRepo) GetAll(_ context.Context) ([]*models.Driver, error) {
+	return r.all, r.getAllErr
+}
 func (r *stubDriverRepo) GetByID(_ context.Context, _ uuid.UUID) (*models.Driver, error) {
 	if r.err != nil {
 		return nil, r.err
@@ -173,6 +177,33 @@ func newAssignHandler(
 	return NewAssignmentHandler(assign, driver, bol, equip, hos, &stubWBSvc{}, &stubAssignNotifySvc{})
 }
 
+// --- Get ---
+
+func TestAssignmentGet_BadUUID_Returns400(t *testing.T) {
+	h := newAssignHandler(&stubAssignRepo{}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	req := withIDParam(httptest.NewRequest(http.MethodGet, "/", nil), "not-a-uuid")
+	rec := httptest.NewRecorder()
+	h.Get(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestAssignmentGet_NotFound_Returns404(t *testing.T) {
+	h := newAssignHandler(&stubAssignRepo{}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	req := withIDParam(httptest.NewRequest(http.MethodGet, "/", nil), uuid.New().String())
+	rec := httptest.NewRecorder()
+	h.Get(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestAssignmentGet_Success_Returns200(t *testing.T) {
+	assign := &models.DriverBOLAssignment{ID: uuid.New(), DriverID: uuid.New(), PlanBOLID: uuid.New()}
+	h := newAssignHandler(&stubAssignRepo{assignment: assign}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	req := withIDParam(httptest.NewRequest(http.MethodGet, "/", nil), assign.ID.String())
+	rec := httptest.NewRecorder()
+	h.Get(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
 // --- Create ---
 
 func TestAssignmentCreate_BOLNotValidated_Returns409(t *testing.T) {
@@ -228,6 +259,78 @@ func TestAssignmentCreate_HOSViolation_Returns422(t *testing.T) {
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
 
+func TestAssignmentCreate_NilBody_Returns400(t *testing.T) {
+	h := newAssignHandler(&stubAssignRepo{}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	req := httptest.NewRequest(http.MethodPost, "/api/assignment", nil)
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestAssignmentCreate_InvalidDriverID_Returns400(t *testing.T) {
+	h := newAssignHandler(&stubAssignRepo{}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	body := map[string]any{
+		"driver_id":    "not-a-uuid",
+		"plan_bol_id":  uuid.New().String(),
+		"equipment_id": uuid.New().String(),
+		"state_code":   "IL",
+		"cycle_label":  "60h/7d",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/assignment", postBody(t, body))
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestAssignmentCreate_BOLNotFound_Returns404(t *testing.T) {
+	h := newAssignHandler(&stubAssignRepo{}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	body := map[string]any{
+		"driver_id":    uuid.New().String(),
+		"plan_bol_id":  uuid.New().String(),
+		"equipment_id": uuid.New().String(),
+		"state_code":   "IL",
+		"cycle_label":  "60h/7d",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/assignment", postBody(t, body))
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestAssignmentCreate_EquipmentNotFound_Returns404(t *testing.T) {
+	bol := &models.PlanBOLRecord{ID: uuid.New(), Status: models.PlanBOLStatusValidated}
+	h := newAssignHandler(&stubAssignRepo{}, &stubDriverRepo{}, &stubBOLRepo{bol: bol}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	body := map[string]any{
+		"driver_id":    uuid.New().String(),
+		"plan_bol_id":  bol.ID.String(),
+		"equipment_id": uuid.New().String(),
+		"state_code":   "IL",
+		"cycle_label":  "60h/7d",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/assignment", postBody(t, body))
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestAssignmentCreate_Success_Returns201(t *testing.T) {
+	bol := &models.PlanBOLRecord{ID: uuid.New(), Status: models.PlanBOLStatusValidated}
+	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusAvailable}
+	h := newAssignHandler(&stubAssignRepo{}, &stubDriverRepo{}, &stubBOLRepo{bol: bol}, &stubAssignEquipRepo{equipment: equip}, &stubHOSSvc{})
+	body := map[string]any{
+		"driver_id":           uuid.New().String(),
+		"plan_bol_id":         bol.ID.String(),
+		"equipment_id":        equip.ID.String(),
+		"state_code":          "IL",
+		"cycle_label":         "60h/7d",
+		"estimated_run_hours": 4.0,
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/assignment", postBody(t, body))
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+}
+
 func TestAssignmentCreate_MissingStateCode_Returns400(t *testing.T) {
 	bol := &models.PlanBOLRecord{ID: uuid.New(), Status: models.PlanBOLStatusValidated}
 	equip := &models.Equipment{ID: uuid.New(), Status: models.EquipmentStatusAvailable}
@@ -246,6 +349,22 @@ func TestAssignmentCreate_MissingStateCode_Returns400(t *testing.T) {
 
 // --- Depart ---
 
+func TestAssignmentDepart_BadUUID_Returns400(t *testing.T) {
+	h := newAssignHandler(&stubAssignRepo{}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), "not-a-uuid")
+	rec := httptest.NewRecorder()
+	h.Depart(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestAssignmentDepart_NotFound_Returns404(t *testing.T) {
+	h := newAssignHandler(&stubAssignRepo{}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), uuid.New().String())
+	rec := httptest.NewRecorder()
+	h.Depart(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
 func TestAssignmentDepart_AlreadyDeparted_Returns409(t *testing.T) {
 	departed := time.Now()
 	assign := &models.DriverBOLAssignment{ID: uuid.New(), DepartedAt: &departed}
@@ -256,7 +375,32 @@ func TestAssignmentDepart_AlreadyDeparted_Returns409(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, rec.Code)
 }
 
+func TestAssignmentDepart_Success_Returns204(t *testing.T) {
+	assign := &models.DriverBOLAssignment{ID: uuid.New(), PlanBOLID: uuid.New()}
+	h := newAssignHandler(&stubAssignRepo{assignment: assign}, &stubDriverRepo{}, &stubBOLRepo{bol: &models.PlanBOLRecord{}}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), assign.ID.String())
+	rec := httptest.NewRecorder()
+	h.Depart(rec, req)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+}
+
 // --- Fulfill ---
+
+func TestAssignmentFulfill_BadUUID_Returns400(t *testing.T) {
+	h := newAssignHandler(&stubAssignRepo{}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), "not-a-uuid")
+	rec := httptest.NewRecorder()
+	h.Fulfill(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestAssignmentFulfill_NotFound_Returns404(t *testing.T) {
+	h := newAssignHandler(&stubAssignRepo{}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), uuid.New().String())
+	rec := httptest.NewRecorder()
+	h.Fulfill(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
 
 func TestAssignmentFulfill_AlreadyFulfilled_Returns409(t *testing.T) {
 	fulfilledAt := time.Now()
@@ -268,10 +412,34 @@ func TestAssignmentFulfill_AlreadyFulfilled_Returns409(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, rec.Code)
 }
 
+func TestAssignmentFulfill_Success_Returns204(t *testing.T) {
+	assign := &models.DriverBOLAssignment{ID: uuid.New(), PlanBOLID: uuid.New()}
+	h := newAssignHandler(&stubAssignRepo{assignment: assign}, &stubDriverRepo{}, &stubBOLRepo{bol: &models.PlanBOLRecord{}}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), assign.ID.String())
+	rec := httptest.NewRecorder()
+	h.Fulfill(rec, req)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+}
+
 // --- ConfirmDeadhead ---
 
+func TestAssignmentConfirmDeadhead_BadUUID_Returns400(t *testing.T) {
+	h := newAssignHandler(&stubAssignRepo{}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), "not-a-uuid")
+	rec := httptest.NewRecorder()
+	h.ConfirmDeadhead(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestAssignmentConfirmDeadhead_NotFound_Returns404(t *testing.T) {
+	h := newAssignHandler(&stubAssignRepo{}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), uuid.New().String())
+	rec := httptest.NewRecorder()
+	h.ConfirmDeadhead(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
 func TestAssignmentConfirmDeadhead_NotYetFulfilled_Returns409(t *testing.T) {
-	// FulfilledAt is nil — driver has not finished the run yet.
 	assign := &models.DriverBOLAssignment{ID: uuid.New(), FulfilledAt: nil}
 	h := newAssignHandler(&stubAssignRepo{assignment: assign}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
 	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), assign.ID.String())
@@ -293,4 +461,14 @@ func TestAssignmentConfirmDeadhead_AlreadyConfirmed_Returns409(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ConfirmDeadhead(rec, req)
 	assert.Equal(t, http.StatusConflict, rec.Code)
+}
+
+func TestAssignmentConfirmDeadhead_Success_Returns204(t *testing.T) {
+	fulfilledAt := time.Now().Add(-1 * time.Hour)
+	assign := &models.DriverBOLAssignment{ID: uuid.New(), PlanBOLID: uuid.New(), FulfilledAt: &fulfilledAt}
+	h := newAssignHandler(&stubAssignRepo{assignment: assign}, &stubDriverRepo{}, &stubBOLRepo{}, &stubAssignEquipRepo{}, &stubHOSSvc{})
+	req := withIDParam(httptest.NewRequest(http.MethodPatch, "/", nil), assign.ID.String())
+	rec := httptest.NewRecorder()
+	h.ConfirmDeadhead(rec, req)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
 }
