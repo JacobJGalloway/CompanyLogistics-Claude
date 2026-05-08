@@ -46,16 +46,27 @@ func (r *stubAssignRepo) ConfirmDeadhead(_ context.Context, _ uuid.UUID, _ time.
 	return nil
 }
 
-type stubDriverRepo struct{ driver *models.Driver }
+type stubDriverRepo struct {
+	driver *models.Driver
+	err    error
+}
 
 func (r *stubDriverRepo) GetAll(_ context.Context) ([]*models.Driver, error) { return nil, nil }
 func (r *stubDriverRepo) GetByID(_ context.Context, _ uuid.UUID) (*models.Driver, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
 	return r.driver, nil
 }
 func (r *stubDriverRepo) Create(_ context.Context, _ *models.Driver) error { return nil }
 func (r *stubDriverRepo) Update(_ context.Context, _ *models.Driver) error { return nil }
 
-type stubBOLRepo struct{ bol *models.PlanBOLRecord }
+type stubBOLRepo struct {
+	bol     *models.PlanBOLRecord
+	stop    *models.PlanBOLStop
+	stopErr error
+	stops   []*models.PlanBOLStop
+}
 
 func (r *stubBOLRepo) Create(_ context.Context, _ *models.PlanBOLRecord) error { return nil }
 func (r *stubBOLRepo) GetByID(_ context.Context, _ uuid.UUID) (*models.PlanBOLRecord, error) {
@@ -75,10 +86,13 @@ func (r *stubBOLRepo) SetSubmittedTransactionID(_ context.Context, _ uuid.UUID, 
 }
 func (r *stubBOLRepo) CreateStop(_ context.Context, _ *models.PlanBOLStop) error { return nil }
 func (r *stubBOLRepo) GetStops(_ context.Context, _ uuid.UUID) ([]*models.PlanBOLStop, error) {
-	return nil, nil
+	return r.stops, nil
 }
 func (r *stubBOLRepo) GetStopByID(_ context.Context, _ uuid.UUID) (*models.PlanBOLStop, error) {
-	return nil, nil
+	if r.stopErr != nil {
+		return nil, r.stopErr
+	}
+	return r.stop, nil
 }
 func (r *stubBOLRepo) MarkStopProcessed(_ context.Context, _ uuid.UUID, _ time.Time) error {
 	return nil
