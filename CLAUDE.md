@@ -58,7 +58,7 @@ dotnet test --filter "FullyQualifiedName~TestName"     # run a single test
 
 ## Switchyard Go Architecture (v1.1)
 
-Read `ARCHITECTURE.md` before writing any code for the Go backend.
+Read `Switchyard-Go/README.md` before writing any code for the Go backend. Key constraints and API reference live there.
 
 **Go project root:** `Switchyard-Go/`
 **Module path:** `github.com/JacobJGalloway/switchyard-go`
@@ -69,27 +69,13 @@ Read `ARCHITECTURE.md` before writing any code for the Go backend.
 cd Switchyard-Go
 go mod tidy              # resolve dependencies and generate go.sum (required first run)
 go build ./...           # build all packages
-go run ./cmd/main.go     # run the Go backend
+go run ./cmd/main.go     # run the Go backend (see README for env var loading)
 go test ./...            # run all tests
 ```
 
-### Priority reading order before touching Go code
-1. Section 2 — CUD authority boundary. PlanBOL entities are Go's domain. Committed BOL stops are .NET's domain. These never cross.
-2. Section 3 — The event handler is the single Go entry point. The M2M token lives here and nowhere else.
-3. Section 4 — Business rules are hard constraints. Empty truck rule, 4-hour dead-head window, state-level HOS limits are enforced at the service layer. They are rejections, not warnings.
-4. Section 5 — Read the full Kanban board design before touching whiteboard code. Column transitions are driven by assignment state.
-5. Section 13 — The integrations adapter is the only place that calls the .NET system. No exceptions.
-
-### Go implementation order
-1. ✅ go.mod and project scaffold
-2. ✅ Domain models `/internal/models`
-3. ✅ Repository interfaces `/internal/repository/interfaces.go`
-4. Migration files `/internal/migrations`
-5. HOSLimit seed data
-6. Integration adapters `/internal/integrations`
-7. Event handler `/internal/events`
-8. Service layer — route_planner and hos_service first
-9. Whiteboard service
-10. Notification service
-11. Handlers `/internal/handlers`
-12. Web templates `/web/templates`
+### Key constraints (enforce without exception)
+1. **CUD authority boundary.** `PlanBOLRecord`, `PlanBOLStop`, and `TruckInventorySnapshot` are Go's domain. Committed BOL stops and inventory writes are .NET's domain. This boundary never crosses.
+2. **M2M token lives in `internal/events` only.** No other package requests, caches, or refreshes a token.
+3. **`internal/integrations` is the only .NET caller.** No handler, service, or repository may call the .NET system directly.
+4. **Business rules are rejections, not warnings.** Empty truck rule, 4-hour dead-head window, and state-level HOS limits are enforced at the service layer and return errors.
+5. **Whiteboard column transitions are derived.** Board columns follow from `PlanBOLStatus` and assignment timestamps — not dispatcher input. Read `whiteboard_service.go` before touching board code.

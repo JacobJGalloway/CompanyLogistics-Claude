@@ -210,6 +210,51 @@ func TestSolvePlan_Violations(t *testing.T) {
 	}
 }
 
+// --- canDeliver pure-function tests ---
+
+func TestCanDeliver_EmptyItems_ReturnsTrue(t *testing.T) {
+	// items is empty — loop never executes, returns true directly.
+	assert.True(t, canDeliver(map[string]int{"SKU-A": 5}, map[string]int{}))
+}
+
+// --- tryFallbackStrategy direct tests ---
+
+func TestSolvePlan_FallbackSucceeds_WhenPreferredFails(t *testing.T) {
+	// Origin has only 3 of SKU-A, but store needs 5. Preferred fails.
+	// wh-2 can cover the 2-unit shortfall, so fallback succeeds.
+	stops, violations := solvePlan("wh-1", []string{"wh-2"},
+		[]StopRequest{
+			{LocationID: "store-1", Items: map[string]int{"SKU-A": 5}},
+		},
+		map[string]map[string]int{
+			"wh-1": {"SKU-A": 3},
+			"wh-2": {"SKU-A": 2},
+		},
+	)
+	assert.Empty(t, violations)
+	require.Len(t, stops, 3) // wh-1 load + wh-2 top-up + store-1 delivery
+}
+
+func TestSolvePlan_FallbackSkipsIrrelevantWarehouse(t *testing.T) {
+	// wh-bad has SKU-B only — cannot cover the SKU-A shortfall.
+	// wh-good has SKU-A — is used instead. Exercises !contributesAny continue branch.
+	stops, violations := solvePlan("wh-1", []string{"wh-bad", "wh-good"},
+		[]StopRequest{
+			{LocationID: "store-1", Items: map[string]int{"SKU-A": 5}},
+		},
+		map[string]map[string]int{
+			"wh-1":   {"SKU-A": 3},
+			"wh-bad": {"SKU-B": 10},
+			"wh-good": {"SKU-A": 2},
+		},
+	)
+	assert.Empty(t, violations)
+	require.Len(t, stops, 3) // wh-1 + wh-good + store-1 (wh-bad skipped)
+	locationIDs := []string{stops[0].locationID, stops[1].locationID, stops[2].locationID}
+	assert.NotContains(t, locationIDs, "wh-bad")
+	assert.Contains(t, locationIDs, "wh-good")
+}
+
 // --- ValidatePlan tests ---
 
 func TestValidatePlan_ValidPlan(t *testing.T) {

@@ -65,6 +65,7 @@ type wbBOLRepo struct {
 	byStatus map[models.PlanBOLStatus][]*models.PlanBOLRecord
 	byID     map[uuid.UUID]*models.PlanBOLRecord
 	stops    map[uuid.UUID][]*models.PlanBOLStop
+	stopsErr error // injected to test GetStops error path in firstUnprocessedStop
 }
 
 func (r *wbBOLRepo) GetByStatus(_ context.Context, s models.PlanBOLStatus) ([]*models.PlanBOLRecord, error) {
@@ -74,7 +75,7 @@ func (r *wbBOLRepo) GetByID(_ context.Context, id uuid.UUID) (*models.PlanBOLRec
 	return r.byID[id], nil
 }
 func (r *wbBOLRepo) GetStops(_ context.Context, id uuid.UUID) ([]*models.PlanBOLStop, error) {
-	return r.stops[id], nil
+	return r.stops[id], r.stopsErr
 }
 func (r *wbBOLRepo) Create(_ context.Context, _ *models.PlanBOLRecord) error {
 	panic("not implemented")
@@ -233,6 +234,13 @@ func TestHOSStatusForWindow_MissingLimit(t *testing.T) {
 
 func TestComputeRestEnd(t *testing.T) {
 	stoppedAt := time.Now().UTC()
+
+	t.Run("nil MandatedStopAt returns zero time", func(t *testing.T) {
+		window := &models.HOSWindow{}
+		end, restType := computeRestEnd(window, nil)
+		assert.True(t, end.IsZero())
+		assert.Empty(t, restType)
+	})
 
 	t.Run("nil limit falls back to 10-hour daily rest", func(t *testing.T) {
 		window := &models.HOSWindow{MandatedStopAt: &stoppedAt}
@@ -639,6 +647,60 @@ func TestGetBoardState_InTransit_PicksFirstUnprocessedStop(t *testing.T) {
 	assert.Equal(t, stop2.ID, board.InDelivery.InTransit[0].CurrentStop.ID, "first unprocessed stop should be seq=2")
 }
 
+func TestGetBoardState_InTransit_StopsRepoError_NilCurrentStop(t *testing.T) {
+	// GetStops returns an error → firstUnprocessedStop returns nil defensively.
+	driverID := uuid.New()
+	bolID := uuid.New()
+	equipID := uuid.New()
+	now := time.Now()
+	departed := now.Add(-2 * time.Hour)
+
+	dr, ar, br, er, hr := emptyRepos()
+	br.stopsErr = fmt.Errorf("db timeout")
+	dr.byID[driverID] = &models.Driver{ID: driverID, Name: "Chris", LicenseState: "IL", IsActive: true}
+	br.byID[bolID] = &models.PlanBOLRecord{ID: bolID, Status: models.PlanBOLStatusSubmitted}
+	er.byID[equipID] = &models.Equipment{ID: equipID}
+	ar.active = []*models.DriverBOLAssignment{{
+		ID: uuid.New(), DriverID: driverID, PlanBOLID: bolID, EquipmentID: equipID,
+		AssignedAt: now.Add(-3 * time.Hour), DepartedAt: &departed,
+	}}
+	hr.windows[driverID] = &models.HOSWindow{DriverID: driverID, DailyHoursUsed: 2}
+
+	board, err := newWBService(dr, ar, br, er, hr).GetBoardState(context.Background())
+	require.NoError(t, err)
+	require.Len(t, board.InDelivery.InTransit, 1)
+	assert.Nil(t, board.InDelivery.InTransit[0].CurrentStop, "GetStops error → nil current stop")
+}
+
+func TestGetBoardState_InTransit_AllStopsProcessed_NilCurrentStop(t *testing.T) {
+	// firstUnprocessedStop returns nil when every stop on the BOL is processed.
+	driverID := uuid.New()
+	bolID := uuid.New()
+	equipID := uuid.New()
+	now := time.Now()
+	departed := now.Add(-2 * time.Hour)
+
+	dr, ar, br, er, hr := emptyRepos()
+	dr.byID[driverID] = &models.Driver{ID: driverID, Name: "Pat", LicenseState: "IL", IsActive: true}
+	br.byID[bolID] = &models.PlanBOLRecord{ID: bolID, Status: models.PlanBOLStatusSubmitted}
+	er.byID[equipID] = &models.Equipment{ID: equipID}
+	ar.active = []*models.DriverBOLAssignment{{
+		ID: uuid.New(), DriverID: driverID, PlanBOLID: bolID, EquipmentID: equipID,
+		AssignedAt: now.Add(-3 * time.Hour), DepartedAt: &departed,
+	}}
+	// All stops marked processed — firstUnprocessedStop returns nil.
+	br.stops[bolID] = []*models.PlanBOLStop{
+		{ID: uuid.New(), PlanBOLID: bolID, Sequence: 1, IsProcessed: true},
+		{ID: uuid.New(), PlanBOLID: bolID, Sequence: 2, IsProcessed: true},
+	}
+	hr.windows[driverID] = &models.HOSWindow{DriverID: driverID, DailyHoursUsed: 2}
+
+	board, err := newWBService(dr, ar, br, er, hr).GetBoardState(context.Background())
+	require.NoError(t, err)
+	require.Len(t, board.InDelivery.InTransit, 1)
+	assert.Nil(t, board.InDelivery.InTransit[0].CurrentStop, "all stops processed — no current stop")
+}
+
 // =============================================================================
 // GetAlerts — alert generation branches
 // =============================================================================
@@ -681,6 +743,152 @@ func TestGetAlerts_HOSWarning_GeneratesAlert(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, alerts, 1)
 	assert.Equal(t, AlertTypeHOSWarning, alerts[0].AlertType)
+}
+
+func TestGetAlerts_RestingDriver_GeneratesHOSWeeklyAlert(t *testing.T) {
+	driverID := uuid.New()
+	now := time.Now()
+	stoppedAt := now.Add(-1 * time.Hour)
+
+	dr, ar, br, er, hr := emptyRepos()
+	driver := &models.Driver{ID: driverID, Name: "Rested", LicenseState: "IL", IsActive: true}
+	dr.all = []*models.Driver{driver}
+	dr.byID[driverID] = driver
+	// driver is NOT in any active assignment — no entries in ar.active
+	hr.windows[driverID] = &models.HOSWindow{
+		DriverID:       driverID,
+		DailyHoursUsed: 10,
+		MandatedStopAt: &stoppedAt,
+	}
+	// need limit so computeRestEnd can compute reset duration
+	hr.limits["IL/60h/7d"] = &models.HOSLimit{
+		DailyDrivingLimitHours: 11,
+		WeeklyLimitHours:       60,
+		RestPeriodHours:        10,
+		WeeklyResetHours:       34,
+	}
+
+	alerts, err := newWBService(dr, ar, br, er, hr).GetAlerts(context.Background())
+	require.NoError(t, err)
+	require.Len(t, alerts, 1)
+	assert.Equal(t, AlertTypeHOSWeeklyLimit, alerts[0].AlertType)
+	require.NotNil(t, alerts[0].DriverID)
+	assert.Equal(t, driverID, *alerts[0].DriverID)
+}
+
+func TestGetAlerts_RoadsideBreakdownWithDriver_GeneratesCriticalAlert(t *testing.T) {
+	equipID := uuid.New()
+	driverID := uuid.New()
+
+	dr, ar, br, er, hr := emptyRepos()
+	driver := &models.Driver{ID: driverID, Name: "Marcus", LicenseState: "OH", IsActive: true}
+	dr.byID[driverID] = driver
+
+	er.all = []*models.Equipment{
+		{ID: equipID, UnitID: "TK-101", Status: models.EquipmentStatusBreakdown},
+	}
+	er.byID[equipID] = er.all[0]
+	er.breakdown[equipID] = &models.BreakdownRecord{
+		EquipmentID:   equipID,
+		BreakdownType: models.BreakdownTypeRoadside,
+		LoadAttached:  true,
+		DriverID:      &driverID,
+	}
+
+	alerts, err := newWBService(dr, ar, br, er, hr).GetAlerts(context.Background())
+	require.NoError(t, err)
+	require.Len(t, alerts, 1)
+	assert.Equal(t, AlertTypeRoadsideBreakdown, alerts[0].AlertType)
+	assert.Equal(t, AlertSeverityCritical, alerts[0].Severity)
+	require.NotNil(t, alerts[0].DriverID)
+	assert.Equal(t, driverID, *alerts[0].DriverID)
+	assert.Contains(t, alerts[0].Message, "TK-101")
+	assert.Contains(t, alerts[0].Message, "Marcus")
+}
+
+func TestGetAlerts_RoadsideBreakdownWithoutDriver_GeneratesCriticalAlert(t *testing.T) {
+	equipID := uuid.New()
+
+	dr, ar, br, er, hr := emptyRepos()
+	er.all = []*models.Equipment{
+		{ID: equipID, UnitID: "TK-102", Status: models.EquipmentStatusBreakdown},
+	}
+	er.byID[equipID] = er.all[0]
+	er.breakdown[equipID] = &models.BreakdownRecord{
+		EquipmentID:   equipID,
+		BreakdownType: models.BreakdownTypeRoadside,
+		LoadAttached:  true,
+		DriverID:      nil,
+	}
+
+	alerts, err := newWBService(dr, ar, br, er, hr).GetAlerts(context.Background())
+	require.NoError(t, err)
+	require.Len(t, alerts, 1)
+	assert.Equal(t, AlertTypeRoadsideBreakdown, alerts[0].AlertType)
+	assert.Nil(t, alerts[0].DriverID)
+	assert.Contains(t, alerts[0].Message, "TK-102")
+}
+
+func TestGetAlerts_ExpiringDeadhead_GeneratesAlert(t *testing.T) {
+	// deadheadSearchWindow = 2h (newWBService default)
+	// expiringThreshold = 1h
+	// FulfilledAt 1.5h ago → expiresAt = now+0.5h → remaining ≈ 30m ≤ 1h → alert
+	driverID := uuid.New()
+	bolID := uuid.New()
+	equipID := uuid.New()
+	now := time.Now()
+	departed := now.Add(-3 * time.Hour)
+	fulfilled := now.Add(-90 * time.Minute)
+
+	dr, ar, br, er, hr := emptyRepos()
+	dr.byID[driverID] = &models.Driver{ID: driverID, Name: "Jordan", LicenseState: "IL"}
+	br.byID[bolID] = &models.PlanBOLRecord{ID: bolID, Status: models.PlanBOLStatusFulfilled}
+	er.byID[equipID] = &models.Equipment{ID: equipID, UnitID: "TK-50"}
+	assignID := uuid.New()
+	ar.active = []*models.DriverBOLAssignment{{
+		ID:          assignID,
+		DriverID:    driverID,
+		PlanBOLID:   bolID,
+		EquipmentID: equipID,
+		AssignedAt:  now.Add(-4 * time.Hour),
+		DepartedAt:  &departed,
+		FulfilledAt: &fulfilled,
+	}}
+
+	alerts, err := newWBService(dr, ar, br, er, hr).GetAlerts(context.Background())
+	require.NoError(t, err)
+	require.Len(t, alerts, 1)
+	assert.Equal(t, AlertTypeExpiringDeadhead, alerts[0].AlertType)
+	require.NotNil(t, alerts[0].AssignmentID)
+	assert.Equal(t, assignID, *alerts[0].AssignmentID)
+}
+
+func TestGetAlerts_NonExpiringDeadhead_NoAlert(t *testing.T) {
+	// FulfilledAt 30m ago → expiresAt = now+1.5h → remaining > 1h → no alert
+	driverID := uuid.New()
+	bolID := uuid.New()
+	equipID := uuid.New()
+	now := time.Now()
+	departed := now.Add(-2 * time.Hour)
+	fulfilled := now.Add(-30 * time.Minute)
+
+	dr, ar, br, er, hr := emptyRepos()
+	dr.byID[driverID] = &models.Driver{ID: driverID, Name: "Alex", LicenseState: "IL"}
+	br.byID[bolID] = &models.PlanBOLRecord{ID: bolID, Status: models.PlanBOLStatusFulfilled}
+	er.byID[equipID] = &models.Equipment{ID: equipID}
+	ar.active = []*models.DriverBOLAssignment{{
+		ID:          uuid.New(),
+		DriverID:    driverID,
+		PlanBOLID:   bolID,
+		EquipmentID: equipID,
+		AssignedAt:  now.Add(-3 * time.Hour),
+		DepartedAt:  &departed,
+		FulfilledAt: &fulfilled,
+	}}
+
+	alerts, err := newWBService(dr, ar, br, er, hr).GetAlerts(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, alerts)
 }
 
 // =============================================================================

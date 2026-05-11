@@ -72,6 +72,8 @@ type InDeliveryCard struct {
 	Equipment      *models.Equipment
 	CurrentStop    *models.PlanBOLStop
 	HOSStatus      HOSStatus
+	HOSPillTone    string // "ok" | "warn" | "danger"
+	HOSPillLabel   string // "Healthy" | "Daily limit · 1h 30m" | "HOS limit"
 	HOSWindow      *models.HOSWindow
 	MandatedStopAt *time.Time
 	ELDStopRef     *string
@@ -109,9 +111,11 @@ type DeliveredCard struct {
 // AvailableDriverCard represents a driver available for assignment.
 // HOSStatus is green (ample hours) or yellow (approaching limit but still assignable).
 type AvailableDriverCard struct {
-	Driver    *models.Driver
-	HOSWindow *models.HOSWindow
-	HOSStatus HOSStatus
+	Driver       *models.Driver
+	HOSWindow    *models.HOSWindow
+	HOSStatus    HOSStatus
+	HOSPillTone  string // "ok" | "warn"
+	HOSPillLabel string // "Healthy" | "Daily limit · 1h 30m"
 }
 
 // RestingDriverCard represents a driver on mandated rest.
@@ -261,14 +265,17 @@ func (s *WhiteboardService) GetBoardState(ctx context.Context) (*BoardState, err
 		switch {
 		case a.FulfilledAt == nil:
 			hosWindow, _ := s.hosRepo.GetWindowByDriver(ctx, a.DriverID)
+			hosStatus, pillTone, pillLabel := s.hosStateForWindow(ctx, hosWindow, driver.LicenseState)
 			card := &InDeliveryCard{
-				Assignment:  a,
-				Driver:      driver,
-				PlanBOL:     bol,
-				Equipment:   equip,
-				CurrentStop: s.firstUnprocessedStop(ctx, a.PlanBOLID),
-				HOSStatus:   s.hosStatusForWindow(ctx, hosWindow, driver.LicenseState),
-				HOSWindow:   hosWindow,
+				Assignment:   a,
+				Driver:       driver,
+				PlanBOL:      bol,
+				Equipment:    equip,
+				CurrentStop:  s.firstUnprocessedStop(ctx, a.PlanBOLID),
+				HOSStatus:    hosStatus,
+				HOSPillTone:  pillTone,
+				HOSPillLabel: pillLabel,
+				HOSWindow:    hosWindow,
 			}
 			if hosWindow != nil && hosWindow.MandatedStopAt != nil {
 				card.MandatedStopAt = hosWindow.MandatedStopAt
@@ -392,10 +399,13 @@ func (s *WhiteboardService) GetBoardState(ctx context.Context) (*BoardState, err
 				TimeUntilReset: time.Until(restEndsAt),
 			})
 		} else {
+			hosStatus, pillTone, pillLabel := s.hosStateForWindow(ctx, window, d.LicenseState)
 			board.Available.AvailableNow = append(board.Available.AvailableNow, &AvailableDriverCard{
-				Driver:    d,
-				HOSWindow: window,
-				HOSStatus: s.hosStatusForWindow(ctx, window, d.LicenseState),
+				Driver:       d,
+				HOSWindow:    window,
+				HOSStatus:    hosStatus,
+				HOSPillTone:  pillTone,
+				HOSPillLabel: pillLabel,
 			})
 		}
 	}
@@ -485,24 +495,35 @@ func (s *WhiteboardService) GetAlerts(ctx context.Context) ([]*BoardAlert, error
 	return alerts, nil
 }
 
-// hosStatusForWindow computes the HOS color dot for a driver card.
-// Returns Green when limit data cannot be fetched — the board renders either way.
+// hosStatusForWindow is a thin wrapper kept for backward compatibility.
 func (s *WhiteboardService) hosStatusForWindow(ctx context.Context, window *models.HOSWindow, stateCode string) HOSStatus {
+	status, _, _ := s.hosStateForWindow(ctx, window, stateCode)
+	return status
+}
+
+// hosStateForWindow computes the HOS status, pill tone, and pill label for a driver card.
+// Returns Green/"ok"/"Healthy" when limit data cannot be fetched — the board renders either way.
+func (s *WhiteboardService) hosStateForWindow(ctx context.Context, window *models.HOSWindow, stateCode string) (HOSStatus, string, string) {
 	if window == nil {
-		return HOSStatusGreen
+		return HOSStatusGreen, "ok", "Healthy"
 	}
 	limit, err := s.hosRepo.GetLimitByStateAndCycle(ctx, stateCode, s.defaultCycleLabel)
 	if err != nil || limit == nil {
-		return HOSStatusGreen
+		return HOSStatusGreen, "ok", "Healthy"
 	}
 	remaining := limit.DailyDrivingLimitHours - window.DailyHoursUsed
 	switch {
 	case remaining <= 0:
-		return HOSStatusRed
+		return HOSStatusRed, "danger", "HOS limit"
 	case remaining <= s.warningThresholdHours:
-		return HOSStatusYellow
+		h := int(remaining)
+		m := int((remaining - float64(h)) * 60)
+		if m < 0 {
+			m = 0
+		}
+		return HOSStatusYellow, "warn", fmt.Sprintf("Daily limit · %dh %02dm", h, m)
 	default:
-		return HOSStatusGreen
+		return HOSStatusGreen, "ok", "Healthy"
 	}
 }
 

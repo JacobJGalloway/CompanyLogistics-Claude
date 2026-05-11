@@ -303,3 +303,48 @@ func TestRecordMandatedStop_Success(t *testing.T) {
 	require.NotNil(t, repo.updated)
 	assert.Equal(t, &stoppedAt, repo.updated.MandatedStopAt)
 }
+
+// --- error path tests (GetWindowByDriver / GetLimitByStateAndCycle failures) ---
+
+func TestOnStopLogged_WindowError_ReturnsError(t *testing.T) {
+	repo := &mockHOSRepo{windowErr: errors.New("db down")}
+	svc := NewHOSService(repo, &mockHOSNotifier{}, 2.0)
+	err := svc.OnStopLogged(context.Background(), events.StopLoggedPayload{DriverID: uuid.New(), LoggedAt: time.Now()})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "getting HOS window")
+}
+
+func TestRecordMandatedStop_WindowError_ReturnsError(t *testing.T) {
+	repo := &mockHOSRepo{windowErr: errors.New("db down")}
+	svc := NewHOSService(repo, &mockHOSNotifier{}, 2.0)
+	err := svc.RecordMandatedStop(context.Background(), uuid.New(), time.Now(), nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "getting HOS window")
+}
+
+func TestCanAssign_WindowError_ReturnsError(t *testing.T) {
+	repo := &mockHOSRepo{windowErr: errors.New("db down")}
+	svc := NewHOSService(repo, &mockHOSNotifier{}, 2.0)
+	err := svc.CanAssign(context.Background(), uuid.New(), 4.0, "IL", "60h/7d")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "getting HOS window")
+}
+
+func TestCanAssign_LimitError_ReturnsError(t *testing.T) {
+	repo := &mockHOSRepo{
+		window:   &models.HOSWindow{DriverID: uuid.New()},
+		limitErr: errors.New("limit not found"),
+	}
+	svc := NewHOSService(repo, &mockHOSNotifier{}, 2.0)
+	err := svc.CanAssign(context.Background(), uuid.New(), 4.0, "IL", "60h/7d")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "getting HOS limit")
+}
+
+func TestResetWindow_WindowError_ReturnsError(t *testing.T) {
+	repo := &mockHOSRepo{windowErr: errors.New("db down")}
+	svc := NewHOSService(repo, &mockHOSNotifier{}, 2.0)
+	err := svc.ResetWindow(context.Background(), uuid.New(), time.Now(), false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "getting HOS window")
+}

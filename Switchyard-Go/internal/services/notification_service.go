@@ -19,17 +19,22 @@ type NotificationConfig struct {
 	DispatchEmail string
 }
 
+// mailerFunc is the send signature of smtp.SendMail, injected so tests can
+// capture outgoing mail without opening an SMTP connection.
+type mailerFunc func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
+
 // NotificationService sends operational email alerts to the dispatch team.
 // It satisfies both events.NotificationService (5 trigger methods wired through
 // the event handler) and the hosNotifier interface in hos_service.go.
 // Notification failures are non-fatal — callers discard the error so that
 // a failed email never blocks a driver workflow event.
 type NotificationService struct {
-	cfg NotificationConfig
+	cfg    NotificationConfig
+	mailer mailerFunc
 }
 
 func NewNotificationService(cfg NotificationConfig) *NotificationService {
-	return &NotificationService{cfg: cfg}
+	return &NotificationService{cfg: cfg, mailer: smtp.SendMail}
 }
 
 // OnHOSLimitApproaching fires when a driver's remaining daily hours fall within
@@ -113,5 +118,5 @@ func (s *NotificationService) send(subject, body string) error {
 		body,
 	}, "\r\n")
 
-	return smtp.SendMail(addr, auth, s.cfg.SMTPUser, []string{s.cfg.DispatchEmail}, []byte(msg))
+	return s.mailer(addr, auth, s.cfg.SMTPUser, []string{s.cfg.DispatchEmail}, []byte(msg))
 }

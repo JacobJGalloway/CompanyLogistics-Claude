@@ -12,6 +12,7 @@ type EquipmentStatus string
 const (
 	EquipmentTypeTruck   EquipmentType = "truck"
 	EquipmentTypeTractor EquipmentType = "tractor"
+	EquipmentTypeTrailer EquipmentType = "trailer"
 
 	EquipmentStatusAvailable   EquipmentStatus = "available"
 	EquipmentStatusAssigned    EquipmentStatus = "assigned"

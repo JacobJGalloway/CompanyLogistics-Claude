@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -83,4 +84,25 @@ func TestRequirePermission_ExactMatchOnly(t *testing.T) {
 func TestCustomClaims_Validate_ReturnsNil(t *testing.T) {
 	c := &CustomClaims{Permissions: []string{"read:bol"}}
 	assert.NoError(t, c.Validate(nil))
+}
+
+// wrongClaims implements validator.CustomClaims but is NOT *CustomClaims.
+// Injecting it simulates a misconfigured middleware chain.
+type wrongClaims struct{}
+
+func (w *wrongClaims) Validate(_ context.Context) error { return nil }
+
+func TestRequirePermission_WrongClaimsType_Returns403(t *testing.T) {
+	inject := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims := &validator.ValidatedClaims{CustomClaims: &wrongClaims{}}
+			ctx := core.SetClaims(r.Context(), claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+	handler := inject(RequirePermission("manage:drivers")(okHandler()))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
 }
