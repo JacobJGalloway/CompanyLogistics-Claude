@@ -2,6 +2,8 @@ import { NavLink } from 'react-router-dom'
 import { usePermissions } from '../hooks/usePermissions'
 import styles from './NavMenu.module.css'
 
+const GO_BASE_URL = import.meta.env.VITE_GO_BASE_URL ?? 'http://localhost:8080'
+
 export default function NavMenu() {
   const { canReadInventory, canReadBOL, canManageUsers } = usePermissions()
 
@@ -36,6 +38,16 @@ export default function NavMenu() {
         >
           Users
         </NavLink>
+      )}
+      {canReadBOL && (
+        <a
+          href={`${GO_BASE_URL}/`}
+          className={styles.link}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Whiteboard
+        </a>
       )}
     </nav>
   )
